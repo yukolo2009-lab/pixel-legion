@@ -1,0 +1,889 @@
+<title>像素小兵</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=ZCOOL+QingKe+HuangYou&display=swap">
+<style>
+/* 布局：竖屏一屏 —— 上 HUD（对手）/ 翻牌棋盘 / 下 HUD（我方）；单一暗色“翻牌屏”外观 */
+:root{
+  --frame:#0f1217; --plate:#1a1f27; --panel:#181c23; --line:#2a313c; --ink:#e9ece4; --muted:#8b94a1;
+  --blue:#2f6bff; --blue-soft:#9db6f2; --orange:#ff7a1a; --orange-soft:#f2c399; --gold:#ffd84a; --disc:#cdd2c9;
+  --f-pix:"Silkscreen", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --f-cn:"ZCOOL QingKe HuangYou","PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
+  --f-body:-apple-system,"PingFang SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--frame);color:var(--ink);font-family:var(--f-body);overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#app{height:100%;display:flex;flex-direction:column;max-width:520px;margin:0 auto;padding-inline:16px;box-sizing:border-box}
+#stage{flex:1;position:relative;min-height:0}
+#board{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+.hud{--side:var(--blue);display:flex;flex-direction:column;gap:6px;padding-block:8px}
+.hud.s1{--side:var(--orange)}
+.hud.flip{transform:rotate(180deg)}
+.stats{display:flex;align-items:center;gap:12px;min-width:0}
+.hp{display:flex;align-items:baseline;gap:4px}
+.hp b{font-family:var(--f-pix);font-size:24px;line-height:1;color:var(--side);font-variant-numeric:tabular-nums;min-width:1.6em}
+small{font-size:11px;color:var(--muted);letter-spacing:.04em;white-space:nowrap}
+.grp{display:flex;flex-direction:column;gap:3px;min-width:0}
+.grow{flex:1}
+.pips{display:flex;gap:3px}
+.pips span{width:9px;height:9px;border-radius:2px;background:var(--line)}
+.pips span.on{background:var(--side)}
+.pips.gate span.on{background:var(--ink)}
+.bar{height:8px;background:var(--line);border-radius:2px;position:relative;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--gold)}
+.bar.g i{background:var(--side)}
+.bar.xp{height:3px}
+.bar.xp i{background:var(--ink)}
+.guard{width:84px}
+.guard.ready small{color:var(--ink)}
+.clock{margin-left:auto;font-family:var(--f-pix);font-size:15px;font-variant-numeric:tabular-nums;color:var(--ink)}
+.clock.hot{color:var(--gold)}
+.pbtn{font:700 13px var(--f-pix);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;width:30px;height:28px;padding:0;cursor:pointer}
+.pbtn:focus-visible,.btn:focus-visible,.pick-card:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.who{font-size:11px;color:var(--muted)}
+
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.card{position:relative;overflow:hidden;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px;display:grid;grid-template-columns:1fr auto;gap:2px 6px;cursor:grab;touch-action:none;transition:transform .12s,opacity .12s}
+.card .cn{font-family:var(--f-cn);font-size:17px;line-height:1.1}
+.card .cc{font:700 13px var(--f-pix);color:var(--gold);align-self:start}
+.card .cd{grid-column:1/-1;font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .cool{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(5,7,10,.62);pointer-events:none}
+.card.poor{opacity:.45}
+.card.lift{transform:translateY(-4px);border-color:var(--side)}
+.card.deny{animation:deny .25s}
+.hud.ro .card{cursor:default}
+@keyframes deny{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+
+.banner{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--f-cn);font-size:26px;color:var(--ink);background:rgba(15,18,23,.82);border:1px solid var(--line);padding:6px 16px;border-radius:8px;pointer-events:none;white-space:nowrap;animation:ban 1.6s forwards}
+.banner.s0{top:68%}
+.banner.s1{top:32%;transform:translate(-50%,-50%) rotate(180deg)}
+@keyframes ban{0%{opacity:0}12%{opacity:1}75%{opacity:1}100%{opacity:0}}
+
+.ov{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(9,11,15,.88);padding:16px;box-sizing:border-box}
+.panel{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:14px;box-sizing:border-box}
+.ov.flip .panel{transform:rotate(180deg)}
+h1{font-family:var(--f-cn);font-weight:400;font-size:44px;margin:0;line-height:1;text-wrap:balance}
+h2{font-family:var(--f-cn);font-weight:400;font-size:28px;margin:0;text-wrap:balance}
+.sub{margin:0;color:var(--muted);font-size:14px}
+.strip{display:flex;gap:4px}
+.strip span{width:18px;height:18px;border-radius:3px;background:var(--disc);animation:walk 1.8s steps(1) infinite}
+@keyframes walk{0%{background:var(--blue)}11%{background:var(--blue-soft)}}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn{font:15px var(--f-body);color:var(--ink);background:var(--plate);border:1px solid var(--line);border-radius:8px;padding:11px 10px;cursor:pointer}
+.btn.main{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.wide{grid-column:1/-1}
+.btn:disabled{opacity:.4;cursor:default}
+.how{margin:0;padding:0;list-style:none;display:grid;gap:6px;font-size:13px;color:var(--muted)}
+.how b{color:var(--ink);font-weight:600;display:inline-block;min-width:6.5em}
+.pick-list{display:grid;gap:8px}
+.pick-card{display:grid;grid-template-columns:1fr auto;gap:2px 10px;text-align:left;font:inherit;color:var(--ink);background:var(--plate);border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer}
+.pick-card .cn{font-family:var(--f-cn);font-size:20px}
+.pick-card .meta{font:700 12px var(--f-pix);color:var(--gold);align-self:center}
+.pick-card .cd{grid-column:1/-1;font-size:12.5px;color:var(--muted)}
+.pick-card.on{border-color:var(--blue);box-shadow:inset 0 0 0 1px var(--blue)}
+.ov.s1 .pick-card.on{border-color:var(--orange);box-shadow:inset 0 0 0 1px var(--orange)}
+.statgrid{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px 12px;font-size:13px}
+.statgrid .h{color:var(--muted)}
+.statgrid .n{font-family:var(--f-pix);font-variant-numeric:tabular-nums}
+.row{display:flex;gap:8px}
+.row .btn{flex:1}
+@media (prefers-reduced-motion:reduce){.strip span{animation:none}.banner{animation:none;opacity:1}}
+</style>
+
+<div id="app">
+  <div class="hud s1" id="hud1"></div>
+  <div id="stage"><canvas id="board"></canvas></div>
+  <div class="hud s0" id="hud0"></div>
+</div>
+
+<div class="ov" id="menu">
+  <div class="panel">
+    <div class="strip" aria-hidden="true"><span style="animation-delay:0s"></span><span style="animation-delay:.2s"></span><span style="animation-delay:.4s"></span><span style="animation-delay:.6s"></span><span style="animation-delay:.8s"></span><span style="animation-delay:1s"></span><span style="animation-delay:1.2s"></span><span style="animation-delay:1.4s"></span><span style="animation-delay:1.6s"></span></div>
+    <h1>像素小兵</h1>
+    <p class="sub">拨动翻牌像素，一格一格冲垮对方基地。一局 3 分钟。</p>
+    <div class="modes">
+      <button class="btn" data-mode="ai" data-diff="easy">人机 · 简单</button>
+      <button class="btn main" data-mode="ai" data-diff="normal">人机 · 普通</button>
+      <button class="btn" data-mode="ai" data-diff="hard">人机 · 困难</button>
+      <button class="btn" data-mode="duo">同屏双人</button>
+    </div>
+    <ul class="how">
+      <li><b>↑ 上拨</b>从这一列发兵（耗 1 兵力）</li>
+      <li><b>↓ 下拨</b>原地升起盾墙，挡碎来兵</li>
+      <li><b>↓↑ 快划 V</b>弹反：来兵变成你的兵冲回去</li>
+      <li><b>拖动技能牌</b>拖到战场上松手释放</li>
+    </ul>
+  </div>
+</div>
+<div class="ov" id="pick" hidden></div>
+<div class="ov" id="pause" hidden>
+  <div class="panel">
+    <h2>暂停</h2>
+    <div class="modes">
+      <button class="btn main wide" id="resume">继续</button>
+      <button class="btn" id="restart">重新开始</button>
+      <button class="btn" id="toMenu">回到菜单</button>
+      <button class="btn wide" id="mute">声音：开</button>
+    </div>
+  </div>
+</div>
+<div class="ov" id="end" hidden></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ===== 数值配置：对应设计文档“初始数值表”，改这里调手感 ===== */
+const CFG = {
+  COLS: 9, ROWS: 14,
+  BASE_HP: 20,
+  TROOP_REGEN: 1500, TROOP_MAX: 6, TROOP_START: 3,
+  STEP: 250,               // 每格耗时 ms
+  OWN_TERR: 1.25,          // 己方领地加速
+  ENEMY_TERR: 0.85,        // 敌方领地减速
+  ENERGY_MAX: 10,
+  WALL_W: 3, WALL_TIME: 2000,
+  GUARD_CD: 6000,          // 盾墙/弹反共用冷却
+  PARRY_GESTURE: 450,      // V 字手势总时长上限（文档 0.3 秒，demo 放宽）
+  PADDLE_TIME: 400, PARRY_SPEED: 1.5,
+  MATCH: 180000, FRENZY_AT: 120000,
+  LOW_HP: 5, LOW_HP_REGEN: 1.3,
+  GATE_EXP: [0, 8, 18, 30, 45],
+  TERR_BONUS_EVERY: 10000,
+};
+const CARDS = {
+  plateau: { name: '台地',   cost: 3, cd: 15000, target: 'area', desc: '3×3 抬升 2 阶，踏上的兵力量 3' },
+  wave:    { name: '浪涌',   cost: 4, cd: 18000, target: 'none', desc: '整排地面波推出，敌兵力量 −1' },
+  laser:   { name: '激光',   cost: 3, cd: 12000, target: 'col',  desc: '清空一列敌兵并染成己方' },
+  rally:   { name: '集结号', cost: 2, cd: 10000, target: 'none', desc: '兵力立刻 +3，可超上限' },
+  freeze:  { name: '冰封',   cost: 3, cd: 15000, target: 'none', desc: '己方半场敌兵减速 3 秒' },
+  turn:    { name: '倒戈',   cost: 5, cd: 20000, target: 'area', desc: '3×3 内敌兵全部倒戈' },
+};
+const AI_LV = {
+  easy:   { think: 950, react: 0.45, parry: 0,    keep: 0, card: 0.15, label: '简单' },
+  normal: { think: 560, react: 0.8,  parry: 0.3,  keep: 1, card: 0.3,  label: '普通' },
+  hard:   { think: 330, react: 1,    parry: 0.65, keep: 2, card: 0.5,  label: '困难' },
+};
+const COL = {
+  frame: '#0f1217', plate: '#1a1f27', hole: '#0a0c10', neutral: '#cdd2c9', back: '#f6f4ea',
+  unit: ['#2f6bff', '#ff7a1a'], terr: ['#9db6f2', '#f2c399'], plat: ['#7f9ff0', '#f0ac70'],
+  dark: ['#1b3a96', '#8f3d07'], gold: '#ffd84a', baseOff: '#252b34',
+};
+
+const COLS = CFG.COLS, ROWS = CFG.ROWS, N = COLS * ROWS, HALF = ROWS / 2;
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const ownHalf = (s, r) => s === 0 ? r >= HALF : r < HALF;
+
+const stage = $('#stage'), cv = $('#board'), ctx = cv.getContext('2d');
+let dpr = 1, cs = 30, ox = 0, oy = 0, boardY = 0;
+let G = null, uid = 0, pid = 0, last = 0, muted = false, firstGame = true, lastSetup = null;
+const occ = new Int16Array(2 * N);
+const oi = (s, c, r) => s * N + r * COLS + c;
+
+/* ===== 声音与震动 ===== */
+let AC = null;
+function audio() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; } }
+  if (AC && AC.state === 'suspended') AC.resume().catch(() => {});
+}
+const lastS = {};
+const SND = {
+  send: [560, 0.05, 'square', 0.05, 1], tick: [1500, 0.012, 'square', 0.012, 1],
+  clash: [190, 0.07, 'square', 0.05, 0.6], base: [95, 0.22, 'sawtooth', 0.09, 0.5],
+  wall: [320, 0.12, 'triangle', 0.08, 0.7], swing: [700, 0.06, 'sine', 0.05, 1.4],
+  parry: [660, 0.25, 'sine', 0.1, 2], card: [520, 0.18, 'triangle', 0.07, 1.6], deny: [140, 0.08, 'square', 0.04, 1],
+};
+function snd(k) {
+  if (!AC || muted) return;
+  const now = AC.currentTime;
+  if (lastS[k] && now - lastS[k] < 0.045) return;
+  lastS[k] = now;
+  const [f, d, type, v, slide] = SND[k];
+  try {
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, now);
+    o.frequency.exponentialRampToValueAtTime(f * slide, now + d);
+    g.gain.setValueAtTime(v, now); g.gain.exponentialRampToValueAtTime(0.0001, now + d);
+    o.connect(g).connect(AC.destination); o.start(now); o.stop(now + d + 0.02);
+  } catch (e) {}
+}
+function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+
+/* ===== 尺寸 ===== */
+function resize() {
+  const r = stage.getBoundingClientRect();
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = Math.max(1, r.width * dpr); cv.height = Math.max(1, r.height * dpr);
+  const unitsH = ROWS + 2 * 0.7 + 2 * 0.35;
+  cs = Math.max(8, Math.floor(Math.min(r.width / COLS, r.height / unitsH)));
+  ox = (r.width - cs * COLS) / 2;
+  oy = (r.height - cs * unitsH) / 2;
+  boardY = oy + cs * 1.05;
+}
+window.addEventListener('resize', resize);
+function cellAt(x, y) {
+  const b = cv.getBoundingClientRect();
+  return { c: Math.floor((x - b.left - ox) / cs), r: Math.floor((y - b.top - boardY) / cs) };
+}
+
+/* ===== 对局 ===== */
+function mkSide(s, hand) {
+  return { s, dir: s === 0 ? -1 : 1, spawn: s === 0 ? ROWS - 1 : 0, hp: CFG.BASE_HP, troops: CFG.TROOP_START,
+    regen: 0, energy: 0, exp: 0, gate: 1, guardCd: 0, frozenUntil: 0, flash: 0, queue: [],
+    cards: hand.map(k => ({ k, cd: 0 })), stats: { kills: 0, hits: 0, parries: 0, walls: 0 } };
+}
+function isHuman(s) { return G && (G.mode === 'duo' || s === 0); }
+
+function newGame(mode, diff, hands) {
+  G = { mode, diff, time: 0, over: false, paused: false, frenzy: false, slow: 0, shake: 0,
+    terr: new Int8Array(N).fill(-1), plat: new Array(N).fill(null), units: [], walls: [], waves: [], fx: [],
+    drag: null, nextBonus: CFG.TERR_BONUS_EVERY, ai: { t: 900 }, hint: firstGame ? 8000 : 0,
+    sides: [mkSide(0, hands[0]), mkSide(1, hands[1])] };
+  firstGame = false; occ.fill(0);
+  lastSetup = { mode, diff };
+  buildHud(); hideOverlays(); resize();
+  banner('开战');
+}
+
+function addEnergy(s, n) { const S = G.sides[s]; S.energy = Math.min(CFG.ENERGY_MAX, S.energy + n); }
+function addExp(s, n) {
+  const S = G.sides[s], O = G.sides[1 - s];
+  S.exp += n * (O.gate - S.gate >= 2 ? 1.5 : 1);
+  while (S.gate < 5 && S.exp >= CFG.GATE_EXP[S.gate]) {
+    S.gate++;
+    if (isHuman(s)) banner(`出兵口 ${S.gate} 格`, s);
+  }
+}
+function paint(c, r, s) { if (r >= 0 && r < ROWS) G.terr[r * COLS + c] = s; }
+
+function send(s, col) {
+  const S = G.sides[s];
+  if (S.troops < 1) { snd('deny'); return false; }
+  S.troops--;
+  const w = S.gate, c0 = clamp(col - Math.floor((w - 1) / 2), 0, COLS - w);
+  for (let i = 0; i < w; i++) S.queue.push(c0 + i);
+  snd('send'); if (isHuman(s)) buzz(8);
+  return true;
+}
+function spawnUnit(s, col) {
+  const S = G.sides[s];
+  const u = { id: ++uid, side: s, col, r: S.spawn, t: 0, flip: 0, pw: 1, boost: 1, dead: false, chargedBy: 0 };
+  G.units.push(u); occ[oi(s, col, u.r)]++; paint(col, u.r, s); charge(u);
+}
+function remove(u) { if (u.dead) return; u.dead = true; occ[oi(u.side, u.col, u.r)]--; }
+function charge(u) {
+  const p = G.plat[u.r * COLS + u.col];
+  if (p && p.side === u.side && u.chargedBy !== p.id) { u.pw = Math.max(u.pw, 1 + p.lvl); u.chargedBy = p.id; }
+}
+
+function interval(u) {
+  let iv = CFG.STEP;
+  const k = u.r * COLS + u.col, t = G.terr[k];
+  if (t === u.side) iv /= CFG.OWN_TERR; else if (t !== -1) iv /= CFG.ENEMY_TERR;
+  const p = G.plat[k]; if (p && p.side !== u.side) iv *= 2;
+  const foe = G.sides[1 - u.side];
+  if (foe.frozenUntil > G.time && ownHalf(foe.s, u.r)) iv *= 2;
+  return iv / u.boost;
+}
+
+function stepUnit(u, iv) {
+  const S = G.sides[u.side], nr = u.r + S.dir;
+  if (nr < 0 || nr >= ROWS) { hitBase(u); return; }
+  for (const w of G.walls) {
+    if (w.row !== nr || u.col < w.c0 || u.col > w.c1) continue;
+    if (w.side === u.side) { if (w.kind === 'wall') { u.t = iv; return; } continue; }
+    if (w.kind === 'wall') { shatter(u, w); return; }
+    convert(u, w); return;
+  }
+  if (occ[oi(u.side, u.col, nr)] > 0) { u.t = iv; return; }
+  occ[oi(u.side, u.col, u.r)]--; u.r = nr; occ[oi(u.side, u.col, nr)]++;
+  u.t -= iv; u.flip = 0; paint(u.col, nr, u.side); charge(u);
+  if (isHuman(u.side)) snd('tick');
+}
+
+function die(u, killer) {
+  if (u.dead) return;
+  remove(u); addEnergy(u.side, 1);
+  if (killer != null) { addExp(killer, 1); G.sides[killer].stats.kills++; }
+  burst(u.col, u.r, COL.unit[u.side], 7);
+}
+function shatter(u, w) {
+  die(u, w.side);
+  burst(u.col, w.row, '#d9dde4', 9);
+  snd('clash');
+}
+function convert(u, w) {
+  occ[oi(u.side, u.col, u.r)]--;
+  u.side = w.side; u.boost = CFG.PARRY_SPEED; u.flip = 0; u.t = 0; u.parried = true;
+  occ[oi(u.side, u.col, u.r)]++;
+  burst(u.col, u.r, COL.gold, 8);
+  if (!w.rewarded) {
+    w.rewarded = true; addEnergy(w.side, 2); G.sides[w.side].stats.parries++;
+    snd('parry'); G.slow = 200; if (isHuman(w.side)) buzz(30);
+  }
+}
+function hitBase(u) {
+  const foe = G.sides[1 - u.side], dmg = u.pw;
+  foe.hp = Math.max(0, foe.hp - dmg); foe.flash = 1;
+  remove(u);
+  addEnergy(u.side, 1); addEnergy(foe.s, 1); addExp(u.side, 3);
+  G.sides[u.side].stats.hits += dmg;
+  G.shake = 7; snd('base'); if (isHuman(foe.s)) buzz(45);
+}
+
+function raise(s, row, col, kind) {
+  const S = G.sides[s];
+  if (S.guardCd > 0) { snd('deny'); return false; }
+  const lo = s === 0 ? HALF : 1, hi = s === 0 ? ROWS - 2 : HALF - 1;
+  row = clamp(row, lo, hi);
+  const c0 = clamp(col - Math.floor(CFG.WALL_W / 2), 0, COLS - CFG.WALL_W), c1 = c0 + CFG.WALL_W - 1;
+  const w = { side: s, row, c0, c1, kind, born: G.time, rewarded: false,
+    until: G.time + (kind === 'wall' ? CFG.WALL_TIME : CFG.PADDLE_TIME) };
+  G.walls.push(w); S.guardCd = CFG.GUARD_CD;
+  for (const u of G.units) {
+    if (!u.dead && u.side !== s && u.r === row && u.col >= c0 && u.col <= c1) kind === 'wall' ? shatter(u, w) : convert(u, w);
+  }
+  if (kind === 'wall') { S.stats.walls++; snd('wall'); } else snd('swing');
+  if (isHuman(s)) buzz(15);
+  return true;
+}
+
+function cardUsable(S, i) { const c = S.cards[i]; return c.cd <= 0 && S.energy >= CARDS[c.k].cost; }
+function useCard(s, i, c, r) {
+  const S = G.sides[s], card = S.cards[i], def = CARDS[card.k];
+  if (!cardUsable(S, i)) { snd('deny'); return false; }
+  if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return false;
+  switch (card.k) {
+    case 'plateau': {
+      const cc = clamp(c, 1, COLS - 2), rc = clamp(r, 1, ROWS - 2), id = ++pid;
+      for (let y = rc - 1; y <= rc + 1; y++) for (let x = cc - 1; x <= cc + 1; x++) G.plat[y * COLS + x] = { id, side: s, lvl: 2, until: G.time + 8000 };
+      for (const u of G.units) if (!u.dead && u.side === s) charge(u);
+      break;
+    }
+    case 'laser':
+      for (const u of G.units) if (!u.dead && u.side !== s && u.col === c) die(u, s);
+      for (let y = 0; y < ROWS; y++) paint(c, y, s);
+      G.fx.push({ type: 'beam', c, side: s, life: 1 });
+      break;
+    case 'rally': S.troops += 3; break;
+    case 'freeze': S.frozenUntil = G.time + 3000; break;
+    case 'wave': G.waves.push({ side: s, r: S.spawn, t: 0, hit: new Set() }); break;
+    case 'turn': {
+      const cc = clamp(c, 1, COLS - 2), rc = clamp(r, 1, ROWS - 2);
+      for (const u of G.units) {
+        if (u.dead || u.side === s || Math.abs(u.col - cc) > 1 || Math.abs(u.r - rc) > 1) continue;
+        occ[oi(u.side, u.col, u.r)]--; u.side = s; u.flip = 0; u.t = 0; occ[oi(s, u.col, u.r)]++;
+        burst(u.col, u.r, COL.gold, 5);
+      }
+      break;
+    }
+  }
+  S.energy -= def.cost; card.cd = def.cd;
+  snd('card'); if (isHuman(s)) buzz(20);
+  banner(def.name, G.mode === 'duo' ? s : (s === 1 ? 1 : 0), true);
+  return true;
+}
+
+function resolve() {
+  for (let c = 0; c < COLS; c++) {
+    for (let g = 0; g < 40; g++) {
+      let a = null, b = null;
+      for (const u of G.units) {
+        if (u.dead || u.col !== c) continue;
+        if (u.side === 0) { if (!a || u.r < a.r) a = u; } else if (!b || u.r > b.r) b = u;
+      }
+      if (!a || !b || a.r > b.r) break;
+      const m = Math.min(a.pw, b.pw);
+      a.pw -= m; b.pw -= m;
+      spark(c, (a.r + b.r) / 2, m);
+      if (a.pw <= 0) die(a, 1);
+      if (b.pw <= 0) die(b, 0);
+    }
+  }
+}
+
+/* ===== 特效 ===== */
+function cellCenter(c, r) { return { x: ox + (c + 0.5) * cs, y: boardY + (r + 0.5) * cs }; }
+function burst(c, r, color, n) {
+  const p = cellCenter(c, r);
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, v = (0.6 + Math.random() * 1.6) * cs / 10;
+    G.fx.push({ type: 'p', x: p.x, y: p.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, color, size: cs * (0.1 + Math.random() * 0.12) });
+  }
+}
+function spark(c, r, m) {
+  burst(c, r, COL.gold, 6 + m * 3); burst(c, r, '#ffffff', 3);
+  snd('clash'); if (m >= 2) G.shake = Math.max(G.shake, 4);
+}
+function banner(text, side, small) {
+  const el = document.createElement('div');
+  el.className = 'banner' + (side === 1 && G && G.mode === 'duo' ? ' s1' : side === 0 && G && G.mode === 'duo' ? ' s0' : '');
+  if (small) el.style.fontSize = '20px';
+  el.textContent = text; stage.appendChild(el);
+  setTimeout(() => el.remove(), 1700);
+}
+
+/* ===== 电脑对手 ===== */
+function aiThink() {
+  const L = AI_LV[G.diff], S = G.sides[1];
+  const cols = Array.from({ length: COLS }, () => ({ n: 0, pw: 0, lead: null, mine: 0 }));
+  let foes = 0, foesHome = 0;
+  for (const u of G.units) {
+    if (u.dead) continue;
+    const c = cols[u.col];
+    if (u.side === 0) { foes++; if (u.r < HALF) foesHome++; c.n++; c.pw += u.pw; if (!c.lead || u.r < c.lead.r) c.lead = u; }
+    else c.mine++;
+  }
+  // 防守：盾墙或弹反
+  if (S.guardCd <= 0 && Math.random() < L.react) {
+    let best = -1;
+    for (let i = 0; i < COLS; i++) {
+      const c = cols[i];
+      if (c.lead && c.lead.r <= 5 && (c.pw >= 2 || c.lead.r <= 2) && (best < 0 || c.lead.r < cols[best].lead.r)) best = i;
+    }
+    if (best >= 0) raise(1, cols[best].lead.r - 1, best, Math.random() < L.parry ? 'paddle' : 'wall');
+  }
+  // 进攻
+  if (S.troops > L.keep) {
+    let col;
+    if (G.diff === 'easy') col = Math.random() * COLS | 0;
+    else {
+      let bestScore = -1e9;
+      for (let i = 0; i < COLS; i++) {
+        const c = cols[i];
+        let sc = -c.n * 1.2 + Math.random() * 1.5;
+        if (G.plat[2 * COLS + i] && G.plat[2 * COLS + i].side === 1) sc += 2;
+        if (G.diff === 'hard' && c.lead && c.lead.r < HALF) sc += 2.5; // 拦截
+        if (sc > bestScore) { bestScore = sc; col = i; }
+      }
+    }
+    send(1, col);
+  }
+  // 技能牌
+  S.cards.forEach((card, i) => {
+    if (!cardUsable(S, i) || Math.random() > L.card) return;
+    let maxC = 0; for (let k = 1; k < COLS; k++) if (cols[k].n > cols[maxC].n) maxC = k;
+    switch (card.k) {
+      case 'laser': if (cols[maxC].n >= 2) useCard(1, i, maxC, 0); break;
+      case 'plateau': useCard(1, i, maxC, 2); break;
+      case 'rally': if (S.troops <= 2) useCard(1, i, 4, 0); break;
+      case 'wave': if (foes >= 4) useCard(1, i, 4, 0); break;
+      case 'freeze': if (foesHome >= 3) useCard(1, i, 4, 0); break;
+      case 'turn': {
+        let best = null, bn = 2;
+        for (let r = 1; r <= 8; r++) for (let c = 1; c < COLS - 1; c++) {
+          let n = 0;
+          for (const u of G.units) if (!u.dead && u.side === 0 && Math.abs(u.col - c) <= 1 && Math.abs(u.r - r) <= 1) n++;
+          if (n > bn) { bn = n; best = { c, r }; }
+        }
+        if (best) useCard(1, i, best.c, best.r);
+        break;
+      }
+    }
+  });
+}
+
+/* ===== 主循环 ===== */
+function update(rawDt) {
+  let dt = rawDt;
+  if (G.slow > 0) { G.slow -= rawDt; dt = rawDt * 0.25; }
+  G.time += dt;
+  if (G.hint > 0) G.hint -= rawDt;
+  const fr = G.time >= CFG.FRENZY_AT ? 2 : 1;
+  if (fr === 2 && !G.frenzy) { G.frenzy = true; banner('狂热阶段'); }
+
+  for (const S of G.sides) {
+    if (S.troops < CFG.TROOP_MAX) {
+      S.regen += dt * fr * (S.hp <= CFG.LOW_HP ? CFG.LOW_HP_REGEN : 1);
+      if (S.regen >= CFG.TROOP_REGEN) { S.regen -= CFG.TROOP_REGEN; S.troops++; }
+    } else S.regen = 0;
+    S.guardCd = Math.max(0, S.guardCd - dt * fr);
+    for (const c of S.cards) c.cd = Math.max(0, c.cd - dt * fr);
+    S.flash = Math.max(0, S.flash - rawDt / 400);
+    if (S.queue.length) {
+      const q = S.queue; S.queue = [];
+      for (const col of q) { if (occ[oi(S.s, col, S.spawn)] === 0) spawnUnit(S.s, col); else S.queue.push(col); }
+      if (S.queue.length > 24) S.queue.length = 24;
+    }
+  }
+  G.walls = G.walls.filter(w => w.until > G.time);
+  for (let k = 0; k < N; k++) if (G.plat[k] && G.plat[k].until <= G.time) G.plat[k] = null;
+
+  const order = G.units.slice().sort((a, b) => (a.side === 0 ? a.r : ROWS - a.r) - (b.side === 0 ? b.r : ROWS - b.r));
+  for (const u of order) {
+    if (u.dead) continue;
+    u.flip = Math.min(1, u.flip + dt / 130);
+    u.t += dt;
+    const iv = interval(u);
+    if (u.t >= iv) stepUnit(u, iv);
+  }
+  resolve();
+
+  for (const w of G.waves) {
+    w.t += dt;
+    if (w.t >= CFG.STEP) { w.t -= CFG.STEP; w.r += G.sides[w.side].dir; }
+    if (w.r < 0 || w.r >= ROWS) { w.dead = true; continue; }
+    for (const u of G.units) {
+      if (u.dead || u.side === w.side || w.hit.has(u.id)) continue;
+      if (w.side === 0 ? u.r >= w.r : u.r <= w.r) {
+        w.hit.add(u.id); u.pw -= 1; burst(u.col, u.r, COL.unit[w.side], 3);
+        if (u.pw <= 0) die(u, w.side);
+      }
+    }
+  }
+  G.waves = G.waves.filter(w => !w.dead);
+  G.units = G.units.filter(u => !u.dead);
+
+  for (const f of G.fx) {
+    if (f.type === 'p') { f.x += f.vx; f.y += f.vy; f.vx *= 0.92; f.vy *= 0.92; f.life -= rawDt / 450; }
+    else f.life -= rawDt / 380;
+  }
+  G.fx = G.fx.filter(f => f.life > 0);
+  G.shake = Math.max(0, G.shake - rawDt / 30);
+
+  if (G.time >= G.nextBonus) {
+    G.nextBonus += CFG.TERR_BONUS_EVERY;
+    const [a, b] = terrCount();
+    if (a !== b) addEnergy(a > b ? 0 : 1, 1);
+  }
+  if (G.mode === 'ai') { G.ai.t -= dt; if (G.ai.t <= 0) { G.ai.t = AI_LV[G.diff].think * (0.7 + Math.random() * 0.6); aiThink(); } }
+  checkEnd();
+}
+function terrCount() { let a = 0, b = 0; for (let k = 0; k < N; k++) { if (G.terr[k] === 0) a++; else if (G.terr[k] === 1) b++; } return [a, b]; }
+
+function checkEnd() {
+  const [A, B] = G.sides;
+  let w;
+  if (A.hp <= 0 || B.hp <= 0) {
+    if (A.hp <= 0 && B.hp <= 0) { const [a, b] = terrCount(); w = a === b ? -1 : a > b ? 0 : 1; }
+    else w = A.hp <= 0 ? 1 : 0;
+  } else if (G.time >= CFG.MATCH) {
+    if (A.hp !== B.hp) w = A.hp > B.hp ? 0 : 1;
+    else { const [a, b] = terrCount(); w = a === b ? -1 : a > b ? 0 : 1; }
+  } else return;
+  endGame(w);
+}
+
+/* ===== 绘制 ===== */
+function rr(x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath(); ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); ctx.fill();
+}
+function drawBase(s, y) {
+  const hp = G ? G.sides[s].hp : CFG.BASE_HP, fl = G ? G.sides[s].flash : 0;
+  const segs = CFG.BASE_HP, sw = cs * COLS / segs, start = Math.floor((segs - hp) / 2), h = cs * 0.7;
+  for (let i = 0; i < segs; i++) {
+    const on = i >= start && i < start + hp;
+    ctx.fillStyle = on ? (fl > 0.5 ? '#ffffff' : COL.unit[s]) : COL.baseOff;
+    rr(ox + i * sw + sw * 0.1, y, sw * 0.8, h, sw * 0.18);
+  }
+}
+function draw() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = cv.width / dpr, H = cv.height / dpr;
+  ctx.fillStyle = COL.frame; ctx.fillRect(0, 0, W, H);
+  if (G && G.shake > 0) ctx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake);
+  const bw = cs * COLS, bh = cs * ROWS, pad = cs * 0.08, sz = cs - pad * 2, rad = cs * 0.14;
+
+  ctx.fillStyle = COL.plate; rr(ox - cs * 0.15, oy - cs * 0.15, bw + cs * 0.3, bh + cs * 2.4 + cs * 0.3, cs * 0.25);
+  if (G && G.frenzy) {
+    ctx.strokeStyle = COL.gold; ctx.globalAlpha = 0.45 + 0.35 * Math.sin(G.time / 120);
+    ctx.lineWidth = 2; ctx.strokeRect(ox - cs * 0.15, oy - cs * 0.15, bw + cs * 0.3, bh + cs * 2.4 + cs * 0.3);
+    ctx.globalAlpha = 1;
+  }
+  drawBase(1, oy);
+  drawBase(0, boardY + bh + cs * 0.35);
+  ctx.fillStyle = COL.hole; ctx.fillRect(ox, boardY, bw, bh);
+
+  // 格子 + 台地
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const k = r * COLS + c, x = ox + c * cs, y = boardY + r * cs;
+    const t = G ? G.terr[k] : -1, p = G ? G.plat[k] : null;
+    if (p) {
+      const lift = p.lvl * cs * 0.07;
+      ctx.fillStyle = COL.dark[p.side]; rr(x + pad, y + pad, sz, sz, rad);
+      ctx.fillStyle = COL.plat[p.side]; rr(x + pad, y + pad - lift, sz, sz, rad);
+      const left = (p.until - G.time) / 8000;
+      if (left < 0.25 && Math.floor(G.time / 120) % 2) { ctx.fillStyle = 'rgba(255,255,255,.25)'; rr(x + pad, y + pad - lift, sz, sz, rad); }
+    } else {
+      ctx.fillStyle = t < 0 ? COL.neutral : COL.terr[t]; rr(x + pad, y + pad, sz, sz, rad);
+    }
+  }
+  // 中线刻度
+  ctx.fillStyle = 'rgba(255,255,255,.35)';
+  ctx.fillRect(ox - cs * 0.12, boardY + HALF * cs - 1, cs * 0.08, 2);
+  ctx.fillRect(ox + bw + cs * 0.04, boardY + HALF * cs - 1, cs * 0.08, 2);
+  if (!G) return;
+
+  // 冰封
+  for (const S of G.sides) if (S.frozenUntil > G.time) {
+    ctx.fillStyle = 'rgba(160,220,255,.16)';
+    ctx.fillRect(ox, boardY + (S.s === 0 ? HALF * cs : 0), bw, HALF * cs);
+  }
+  // 浪涌
+  for (const w of G.waves) {
+    ctx.fillStyle = COL.unit[w.side]; ctx.globalAlpha = 0.28;
+    ctx.fillRect(ox, boardY + w.r * cs, bw, cs);
+    ctx.globalAlpha = 0.9; ctx.fillRect(ox, boardY + (w.side === 0 ? w.r * cs : (w.r + 1) * cs - 3), bw, 3);
+    ctx.globalAlpha = 1;
+  }
+  // 小兵（翻牌）
+  for (const u of G.units) {
+    const x = ox + u.col * cs, y = boardY + u.r * cs;
+    const p = G.plat[u.r * COLS + u.col], lift = p ? p.lvl * cs * 0.07 : 0;
+    const f = u.flip, sy = Math.abs(Math.cos(Math.PI * f)), h = Math.max(sz * 0.08, sz * sy);
+    ctx.fillStyle = f < 0.5 ? COL.back : COL.unit[u.side];
+    rr(x + pad, y + pad - lift + (sz - h) / 2, sz, h, rad);
+    if (f >= 0.5) {
+      if (u.parried) { ctx.strokeStyle = COL.gold; ctx.lineWidth = 2; ctx.strokeRect(x + pad + 1, y + pad - lift + 1, sz - 2, sz - 2); }
+      if (u.pw > 1) {
+        ctx.fillStyle = '#fff'; ctx.font = `700 ${Math.round(cs * 0.42)}px Silkscreen, ui-monospace, monospace`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(String(u.pw), x + cs / 2, y + cs / 2 - lift + 1);
+      }
+    }
+  }
+  // 盾墙 / 弹板
+  for (const w of G.walls) {
+    const x = ox + w.c0 * cs, y = boardY + w.row * cs, ww = (w.c1 - w.c0 + 1) * cs;
+    if (w.kind === 'wall') {
+      const left = (w.until - G.time) / CFG.WALL_TIME;
+      ctx.globalAlpha = left < 0.2 ? 0.5 : 1;
+      ctx.fillStyle = COL.dark[w.side]; rr(x + 2, y + cs * 0.22, ww - 4, cs * 0.56, cs * 0.1);
+      ctx.fillStyle = '#e8ecf2'; ctx.fillRect(x + 4, y + cs * 0.22 + 2, ww - 8, cs * 0.1);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.save(); ctx.shadowColor = COL.gold; ctx.shadowBlur = cs * 0.6;
+      ctx.fillStyle = COL.gold; rr(x + 2, y + cs * 0.36, ww - 4, cs * 0.28, cs * 0.1); ctx.restore();
+    }
+  }
+  // 特效
+  for (const f of G.fx) {
+    ctx.globalAlpha = Math.max(0, f.life);
+    if (f.type === 'p') { ctx.fillStyle = f.color; ctx.fillRect(f.x - f.size / 2, f.y - f.size / 2, f.size, f.size); }
+    else if (f.type === 'beam') {
+      ctx.fillStyle = COL.unit[f.side]; ctx.fillRect(ox + f.c * cs + cs * 0.2, boardY, cs * 0.6, bh);
+      ctx.fillStyle = '#fff'; ctx.fillRect(ox + f.c * cs + cs * 0.4, boardY, cs * 0.2, bh);
+    }
+  }
+  ctx.globalAlpha = 1;
+  // 拖牌预览
+  const d = G.drag;
+  if (d && d.c >= 0 && d.c < COLS && d.r >= 0 && d.r < ROWS) {
+    const t = CARDS[G.sides[d.s].cards[d.i].k].target;
+    ctx.strokeStyle = COL.unit[d.s]; ctx.lineWidth = 3; ctx.fillStyle = 'rgba(255,255,255,.18)';
+    let x, y, w, h;
+    if (t === 'area') { const cc = clamp(d.c, 1, COLS - 2), rc = clamp(d.r, 1, ROWS - 2); x = ox + (cc - 1) * cs; y = boardY + (rc - 1) * cs; w = h = cs * 3; }
+    else if (t === 'col') { x = ox + d.c * cs; y = boardY; w = cs; h = bh; }
+    else { x = ox; y = boardY; w = bw; h = bh; }
+    ctx.fillRect(x, y, w, h); ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
+  }
+  // 新手提示
+  if (G.hint > 0) {
+    ctx.globalAlpha = Math.min(1, G.hint / 800);
+    ctx.fillStyle = 'rgba(10,12,16,.78)'; ctx.fillRect(ox, boardY + bh * 0.58, bw, cs * 3.4);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `${Math.round(cs * 0.48)}px ${getComputedStyle(document.body).fontFamily}`;
+    const lines = ['↑ 上拨发兵', '↓ 下拨升盾墙', '↓↑ 快划 V 字 = 弹反', '技能牌拖到战场释放'];
+    lines.forEach((t, i) => ctx.fillText(t, ox + bw / 2, boardY + bh * 0.58 + cs * (0.55 + i * 0.78)));
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* ===== HUD ===== */
+const hudEls = [];
+function buildHud() {
+  for (let s = 0; s < 2; s++) {
+    const el = $('#hud' + s), S = G.sides[s];
+    const ai = G.mode === 'ai' && s === 1;
+    el.classList.toggle('flip', G.mode === 'duo' && s === 1);
+    el.classList.toggle('ro', ai);
+    const who = G.mode === 'duo' ? (s === 0 ? '蓝方' : '橙方') : ai ? '电脑 · ' + AI_LV[G.diff].label : '你';
+    el.innerHTML = `
+      <div class="stats">
+        <div class="hp"><b class="hpv">20</b><small>基地 · ${who}</small></div>
+        <div class="grp"><small>兵力</small><div class="pips troops">${'<span></span>'.repeat(CFG.TROOP_MAX)}</div></div>
+        <div class="grp"><small>出兵口</small><div class="pips gate">${'<span></span>'.repeat(5)}</div><div class="bar xp"><i></i></div></div>
+        <div class="clock">3:00</div>
+        ${ai ? '' : '<button class="pbtn" aria-label="暂停">II</button>'}
+      </div>
+      <div class="stats">
+        <div class="grp grow"><small>能量 <span class="env">0</span> / ${CFG.ENERGY_MAX}</small><div class="bar energy"><i></i></div></div>
+        <div class="grp guard"><small>盾 / 弹反</small><div class="bar g"><i></i></div></div>
+      </div>
+      <div class="cards">${S.cards.map((c, i) => `
+        <div class="card" data-i="${i}" ${ai ? '' : 'role="button" tabindex="0"'} aria-label="${CARDS[c.k].name}">
+          <div class="cn">${CARDS[c.k].name}</div><div class="cc">${CARDS[c.k].cost}</div>
+          <div class="cd">${CARDS[c.k].desc}</div><div class="cool"></div>
+        </div>`).join('')}</div>`;
+    const q = sel => el.querySelector(sel);
+    hudEls[s] = {
+      hp: q('.hpv'), troops: [...el.querySelectorAll('.troops span')], gate: [...el.querySelectorAll('.gate span')],
+      xp: q('.xp i'), clock: q('.clock'), en: q('.energy i'), env: q('.env'), guard: q('.g i'), guardBox: q('.guard'),
+      cards: [...el.querySelectorAll('.card')],
+    };
+    const pb = q('.pbtn'); if (pb) pb.addEventListener('click', pauseGame);
+    if (!ai) hudEls[s].cards.forEach((cel, i) => bindCard(cel, s, i));
+  }
+}
+function updateHud() {
+  if (!G) return;
+  const left = Math.max(0, CFG.MATCH - G.time), m = Math.floor(left / 60000), sec = Math.floor(left / 1000) % 60;
+  const clock = `${m}:${String(sec).padStart(2, '0')}`;
+  for (let s = 0; s < 2; s++) {
+    const S = G.sides[s], h = hudEls[s]; if (!h) continue;
+    h.hp.textContent = S.hp;
+    h.troops.forEach((e, i) => e.classList.toggle('on', i < S.troops));
+    h.gate.forEach((e, i) => e.classList.toggle('on', i < S.gate));
+    const lo = CFG.GATE_EXP[S.gate - 1], hi = CFG.GATE_EXP[S.gate];
+    h.xp.style.width = (S.gate >= 5 ? 100 : clamp((S.exp - lo) / (hi - lo) * 100, 0, 100)) + '%';
+    h.clock.textContent = clock; h.clock.classList.toggle('hot', G.frenzy);
+    h.en.style.width = (S.energy / CFG.ENERGY_MAX * 100) + '%'; h.env.textContent = S.energy;
+    h.guard.style.width = ((1 - S.guardCd / CFG.GUARD_CD) * 100) + '%';
+    h.guardBox.classList.toggle('ready', S.guardCd <= 0);
+    h.cards.forEach((cel, i) => {
+      const c = S.cards[i];
+      cel.classList.toggle('poor', S.energy < CARDS[c.k].cost);
+      cel.querySelector('.cool').style.width = (c.cd / CARDS[c.k].cd * 100) + '%';
+    });
+  }
+}
+function bindCard(el, s, i) {
+  el.addEventListener('pointerdown', e => {
+    audio();
+    if (!G || G.over || G.paused) return;
+    if (!cardUsable(G.sides[s], i)) { el.classList.remove('deny'); void el.offsetWidth; el.classList.add('deny'); snd('deny'); return; }
+    G.drag = { s, i, c: -1, r: -1, id: e.pointerId, el };
+    el.classList.add('lift');
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault();
+  });
+  el.addEventListener('pointermove', e => {
+    const d = G && G.drag; if (!d || d.id !== e.pointerId) return;
+    const cell = cellAt(e.clientX, e.clientY); d.c = cell.c; d.r = cell.r;
+  });
+  const end = e => {
+    const d = G && G.drag; if (!d || d.id !== e.pointerId) return;
+    G.drag = null; d.el.classList.remove('lift');
+    if (e.type === 'pointerup' && !G.over) {
+      const cell = cellAt(e.clientX, e.clientY);
+      if (cell.c >= 0 && cell.c < COLS && cell.r >= 0 && cell.r < ROWS) useCard(d.s, d.i, cell.c, cell.r);
+    }
+  };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+}
+
+/* ===== 手势 ===== */
+const touches = new Map();
+function fwd(t, e) { const dy = e.clientY - t.y0; return t.side === 0 ? -dy : dy; }
+cv.addEventListener('pointerdown', e => {
+  audio();
+  if (!G || G.over || G.paused) return;
+  const cell = cellAt(e.clientX, e.clientY);
+  const side = G.mode === 'duo' ? (cell.r < HALF ? 1 : 0) : 0;
+  touches.set(e.pointerId, { side, y0: e.clientY, t0: performance.now(), c: clamp(cell.c, 0, COLS - 1), r: clamp(cell.r, 0, ROWS - 1), minF: 0 });
+  try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+  e.preventDefault();
+});
+cv.addEventListener('pointermove', e => {
+  const t = touches.get(e.pointerId); if (!t) return;
+  const f = fwd(t, e); if (f < t.minF) t.minF = f;
+});
+cv.addEventListener('pointerup', e => {
+  const t = touches.get(e.pointerId); if (!t) return;
+  touches.delete(e.pointerId);
+  if (!G || G.over || G.paused) return;
+  const f = fwd(t, e), dur = performance.now() - t.t0, TH = Math.max(16, cs * 0.55);
+  if (t.minF <= -TH && f - t.minF >= TH && dur <= CFG.PARRY_GESTURE) raise(t.side, t.r, t.c, 'paddle');
+  else if (t.minF <= -TH) raise(t.side, t.r, t.c, 'wall');
+  else if (f >= TH) send(t.side, t.c);
+});
+cv.addEventListener('pointercancel', e => touches.delete(e.pointerId));
+
+/* ===== 界面流程 ===== */
+function hideOverlays() { ['#menu', '#pick', '#pause', '#end'].forEach(s => $(s).hidden = true); }
+function showMenu() { G = null; hideOverlays(); $('#menu').hidden = false; ['#hud0', '#hud1'].forEach(s => $(s).innerHTML = ''); resize(); }
+
+function startFlow(mode, diff) {
+  const hands = [null, null];
+  const step = s => {
+    if (s === 2 || (mode === 'ai' && s === 1)) {
+      if (mode === 'ai') hands[1] = shuffle(Object.keys(CARDS)).slice(0, 2);
+      newGame(mode, diff, hands); return;
+    }
+    showPick(s, mode, hand => { hands[s] = hand; step(s + 1); });
+  };
+  step(0);
+}
+function showPick(s, mode, cb) {
+  hideOverlays();
+  const ov = $('#pick'), draw3 = shuffle(Object.keys(CARDS)).slice(0, 3), chosen = new Set();
+  ov.className = 'ov s' + s + (mode === 'duo' && s === 1 ? ' flip' : '');
+  const who = mode === 'duo' ? (s === 0 ? '蓝方' : '橙方') : '';
+  ov.innerHTML = `<div class="panel">
+    <h2>${who}选 2 张技能牌</h2>
+    <p class="sub">技能牌花能量、有冷却。己方小兵阵亡或基地挨打都会涨能量。</p>
+    <div class="pick-list">${draw3.map(k => `
+      <button class="pick-card" data-k="${k}"><span class="cn">${CARDS[k].name}</span>
+      <span class="meta">${CARDS[k].cost} 能量 · ${CARDS[k].cd / 1000}s</span><span class="cd">${CARDS[k].desc}</span></button>`).join('')}</div>
+    <button class="btn main" id="pickGo" disabled>带这 2 张开战</button></div>`;
+  ov.hidden = false;
+  const go = ov.querySelector('#pickGo');
+  ov.querySelectorAll('.pick-card').forEach(b => b.addEventListener('click', () => {
+    audio();
+    const k = b.dataset.k;
+    if (chosen.has(k)) chosen.delete(k); else { if (chosen.size >= 2) return; chosen.add(k); }
+    b.classList.toggle('on', chosen.has(k));
+    go.disabled = chosen.size !== 2;
+  }));
+  go.addEventListener('click', () => cb([...chosen]));
+}
+function pauseGame() { if (!G || G.over) return; G.paused = true; $('#pause').hidden = false; }
+$('#resume').addEventListener('click', () => { if (G) G.paused = false; $('#pause').hidden = true; last = 0; });
+$('#restart').addEventListener('click', () => { if (lastSetup) startFlow(lastSetup.mode, lastSetup.diff); });
+$('#toMenu').addEventListener('click', showMenu);
+$('#mute').addEventListener('click', e => { muted = !muted; e.target.textContent = '声音：' + (muted ? '关' : '开'); });
+document.querySelectorAll('#menu [data-mode]').forEach(b => b.addEventListener('click', () => { audio(); startFlow(b.dataset.mode, b.dataset.diff || 'normal'); }));
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
+
+function endGame(w) {
+  G.over = true; G.drag = null;
+  const [A, B] = G.sides, [ta, tb] = terrCount();
+  let title;
+  if (G.mode === 'ai') title = w === 0 ? '胜利' : w === 1 ? '惜败' : '平局';
+  else title = w === 0 ? '蓝方获胜' : w === 1 ? '橙方获胜' : '平局';
+  const n = v => `<span class="n">${v}</span>`;
+  const ov = $('#end');
+  ov.className = 'ov';
+  ov.innerHTML = `<div class="panel">
+    <h2>${title}</h2>
+    <div class="statgrid">
+      <span class="h"></span><span class="h">${G.mode === 'ai' ? '你' : '蓝方'}</span><span class="h">${G.mode === 'ai' ? '电脑' : '橙方'}</span>
+      <span class="h">基地剩余</span>${n(A.hp)}${n(B.hp)}
+      <span class="h">击碎敌兵</span>${n(A.stats.kills)}${n(B.stats.kills)}
+      <span class="h">打进基地</span>${n(A.stats.hits)}${n(B.stats.hits)}
+      <span class="h">弹反成功</span>${n(A.stats.parries)}${n(B.stats.parries)}
+      <span class="h">领地格数</span>${n(ta)}${n(tb)}
+    </div>
+    <div class="row"><button class="btn main" id="again">再来一局</button><button class="btn" id="endMenu">回到菜单</button></div></div>`;
+  ov.hidden = false;
+  ov.querySelector('#again').addEventListener('click', () => startFlow(lastSetup.mode, lastSetup.diff));
+  ov.querySelector('#endMenu').addEventListener('click', showMenu);
+}
+
+function frame(ts) {
+  const dt = last ? Math.min(50, ts - last) : 16; last = ts;
+  if (G && !G.over && !G.paused) update(dt);
+  draw(); updateHud();
+  requestAnimationFrame(frame);
+}
+resize();
+requestAnimationFrame(frame);
+})();
+</script>
