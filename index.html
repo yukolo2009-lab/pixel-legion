@@ -1,3 +1,9 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0f1217">
 <title>像素小兵</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,7 +18,8 @@
   --f-body:-apple-system,"PingFang SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
   color-scheme:dark;
 }
-html,body{height:100%}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
 body{background:var(--frame);color:var(--ink);font-family:var(--f-body);overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 #app{height:100%;display:flex;flex-direction:column;max-width:520px;margin:0 auto;padding-inline:16px;box-sizing:border-box}
 #stage{flex:1;position:relative;min-height:0}
@@ -91,6 +98,8 @@ h2{font-family:var(--f-cn);font-weight:400;font-size:28px;margin:0;text-wrap:bal
 .row .btn{flex:1}
 @media (prefers-reduced-motion:reduce){.strip span{animation:none}.banner{animation:none;opacity:1}}
 </style>
+</head>
+<body>
 
 <div id="app">
   <div class="hud s1" id="hud1"></div>
@@ -887,3 +896,5 @@ resize();
 requestAnimationFrame(frame);
 })();
 </script>
+</body>
+</html>
