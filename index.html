@@ -217,7 +217,7 @@ const CFG = {
   SCRUM_DEPTH: 6, SCRUM_SIDE: 0.5, SCRUM_VMAX: 1.5,    // 顶牛：身后多少格算推力、相邻列算几成、交战点最快移动速度（格/秒）
   RING_LIFE: 900, RING_SPEED: 7, RING_AMP: 0.12,
   MATCH: 180000, FRENZY_AT: 120000, LOW_HP_FRAC: 0.2, LOW_HP_REGEN: 1.3,
-  TILE: 0.95, VTILE: 0.47, THICK: 0.07, SOLDIER_H: 0.16, PW_H: 0.08, ELEV_DEG: 58, FOV: 34,
+  TILE: 0.95, VTILE: 0.47, THICK: 0.07, SOLDIER_H: 0.16, PW_H: 0.08, 
 };
 const AI_LV = {
   easy:   { think: 950, react: 0.4,  parry: 0,    min: 3, max: 5,  label: '简单' },
@@ -245,6 +245,7 @@ const DEBUG = [
   { id: 'rows',    name: '战场行数',     type: 'num', min: 16, max: 80, step: 2, def: 60, unit: '行', desc: '“行数自动撑满”关掉时生效，下一局生效' },
   { g: '画面' },
   { id: 'phone',   name: '手机比例预览', type: 'bool', def: true, desc: '把游戏区框成 iPhone 18 Pro / Pro Max 的 19.5:9；切换后点“重开”让行数重算' },
+  { id: 'camAngle', name: '镜头角度',   type: 'num', min: 60, max: 90, step: 5, def: 90, unit: '°', desc: '90° 为正俯视（从正上方往下看）；改完点“重开”让行数重算' },
   { id: 'flipMode', name: '翻转方式',   type: 'ab', a: '地面翻牌', b: '地面上翻跟头', def: 'a' },
   { id: 'rings',   name: '撞击波纹圈',   type: 'bool', def: true, desc: '相撞、崩碎、打进基地时，地面荡开一圈波纹' },
   { id: 'flipSound', name: '翻牌声',     type: 'bool', def: true, desc: '翻板翻过去时“嗒”一声，翻得多就叠成哗啦声' },
@@ -795,8 +796,8 @@ function updateLine(dt) {
     }
     let t = null;
     if (bf < Infinity && of > -Infinity) t = (bf + of) / 2;
-    else if (bf < Infinity) t = bf - 0.6;
-    else if (of > -Infinity) t = of + 0.6;
+    else if (bf < Infinity) t = Math.min(G.line[c], bf - 0.6);   // 只剩蓝方：战线只会被往前推，不会往回退
+    else if (of > -Infinity) t = Math.max(G.line[c], of + 0.6);
     G.line[c] += ((t === null ? G.line[c] : t) - G.line[c]) * k;
     G.heat[c] += (hot[c] - G.heat[c]) * Math.min(1, dt / 250);
   }
@@ -890,7 +891,10 @@ const R = (() => {
     const m = new THREE.Mesh(unitPlane, M({ color, roughness: 1 }));
     m.rotation.x = -Math.PI / 2; m.scale.set(w, h, 1); m.position.set(x, y, z); m.receiveShadow = true; field.add(m); return m;
   }
-  const ELEV = CFG.ELEV_DEG * Math.PI / 180, camDir = new THREE.Vector3(0, Math.sin(ELEV), Math.cos(ELEV));
+  let ELEV = Math.PI / 2;
+  const camDir = new THREE.Vector3();
+  function setAngle() { ELEV = clamp(opt('camAngle'), 60, 90) * Math.PI / 180; camDir.set(0, Math.sin(ELEV), Math.cos(ELEV)); }
+  setAngle();
   const center = new THREE.Vector3(COLS / 2, 0, ROWS / 2);
   let layoutDirty = true;
   function layout() {
@@ -911,7 +915,8 @@ const R = (() => {
   function autoRows() {
     const r = stage.getBoundingClientRect(), W = Math.max(1, r.width), H = Math.max(1, r.height);
     const unitsH = H / (W / (COLS + 0.6));
-    const rows = Math.floor(((unitsH - 0.8) / Math.sin(ELEV) - 3.6) * 0.92 / 2) * 2;
+    setAngle();
+    const rows = Math.floor(((unitsH - 0.4) / Math.sin(ELEV) - 3.4) / 2) * 2;
     return clamp(rows, CFG.MIN_ROWS, CFG.MAX_ROWS);
   }
 
@@ -949,17 +954,19 @@ const R = (() => {
   const bandMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32, depthWrite: false });
   const bands = [0, 1, 2, 3].map(() => { const m = new THREE.Mesh(new THREE.BoxGeometry(COLS, 0.6, 0.5), bandMat.clone()); m.visible = false; scene.add(m); return m; });
 
-  // 镜头：透视（已采纳）
-  const cam = new THREE.PerspectiveCamera(CFG.FOV, 1, 0.1, 600);
-  let shadowOn = true, shake = 0;
+  // 镜头：正俯视、不分远近（斜视角不采纳）
+  const cam = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 600);
+  cam.up.set(0, 0, -1);   // 屏幕上方 = 橙方
+  let shadowOn = true, shake = 0, camAngle = opt('camAngle');
   function fit() {
+    setAngle(); camAngle = opt('camAngle');
     const r = stage.getBoundingClientRect(), W = Math.max(1, r.width), H = Math.max(1, r.height);
     renderer.setSize(W, H, false);
-    const aspect = W / H, width = COLS + 0.6, height = (ROWS + 3.6) * Math.sin(ELEV) + 0.8;
-    cam.aspect = aspect;
-    const t = Math.tan(cam.fov * Math.PI / 360);
-    const D = Math.max(height / 2 / t, width / 2 / (t * aspect)) * 1.06;
-    cam.position.copy(center).addScaledVector(camDir, D); cam.lookAt(center); cam.updateProjectionMatrix();
+    const aspect = W / H, width = COLS + 0.4, height = (ROWS + 3.4) * Math.sin(ELEV) + 0.6 * Math.cos(ELEV) + 0.2;
+    let hh = height / 2, hw = hh * aspect;
+    if (width / 2 > hw) { hw = width / 2; hh = hw / aspect; }
+    Object.assign(cam, { left: -hw, right: hw, top: hh, bottom: -hh });
+    cam.position.copy(center).addScaledVector(camDir, 150); cam.lookAt(center); cam.updateProjectionMatrix();
   }
   window.addEventListener('resize', fit);
   try { new ResizeObserver(fit).observe(stage); } catch (e) {}
@@ -1034,6 +1041,7 @@ const R = (() => {
 
   let flipCount = 0, flipT = 0;
   function render(dt) {
+    if (opt('camAngle') !== camAngle) fit();
     const sOn = !!opt('shadow');
     if (sOn !== shadowOn) { shadowOn = sOn; renderer.shadowMap.enabled = sOn; sun.castShadow = sOn; mats.forEach(m => m.needsUpdate = true); }
     const t = G ? G.time : now(), roll = opt('flipMode') === 'b';
@@ -1458,12 +1466,12 @@ $('#dbgList').addEventListener('input', e => {
 function dbgSummary() {
   const n = new Date(), day = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
   const tag = { yes: '采纳', no: '不采纳', wait: '待定' };
-  let out = `像素小兵 v6 调试结论（${day}）`;
+  let out = `像素小兵 v6 调试结论（${day}）\n格式：项目（结论）：当前值。结论针对整个项目，与当前值无关`;
   for (const d of DEBUG) {
     if (d.g) { out += `\n【${d.g}】`; continue; }
     const v = DBG.val[d.id];
     const cur = d.type === 'bool' ? (v ? '开' : '关') : d.type === 'num' ? fmtNum(d, v) : d.type === 'sel' ? d.opts.find(o => o[0] === v)[1] : (v === 'a' ? d.a : d.b);
-    out += `\n- ${d.name}：${cur}（${tag[DBG.verdict[d.id]]}）`;
+    out += `\n- ${d.name}（${tag[DBG.verdict[d.id]]}）：当前 ${cur}`;
   }
   if (G) {
     const s = statsRows(G.sides[0]);
