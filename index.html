@@ -139,7 +139,7 @@ h1{font-family:var(--f-cn);font-weight:400;font-size:42px;margin:0;line-height:1
 <div id="shell">
   <aside id="dbg" aria-label="调试栏">
     <button class="dbg-mini" id="dbgOpen" aria-label="展开调试栏">调试</button>
-    <div class="dbg-head"><h2>调试栏</h2><span class="tag">v8</span><button class="x" id="dbgClose" aria-label="收窄调试栏">收起</button></div>
+    <div class="dbg-head"><h2>调试栏</h2><span class="tag">v8.1</span><button class="x" id="dbgClose" aria-label="收窄调试栏">收起</button></div>
     <p class="dbg-note">开关和滑块随时调、立刻生效（标“下一局”的除外）。试完给每一项标上采纳或不采纳，结论保存在这台设备上。</p>
     <div class="dbg-list" id="dbgList"></div>
     <div class="dbg-foot">
@@ -210,6 +210,7 @@ if (!window.THREE) { $('#menuSub').textContent = '3D 引擎没有加载成功，
 
 /* ===== 固定数值（常调的在调试栏里；已采纳的结论写死在这里） ===== */
 const CFG = {
+  COLS: 25, ARROW_ANG: 20,   // v8 调试结论：格子密度 25 列、箭头角度 20°（已采纳，写死）
   BASE_COLS: 25, MAX_COLS: 50, MAX_ROWS: 80, MIN_ROWS: 16,   // 行数范围按 25 列的基准，格子密度变了会按比例换算
   TROOP_START: 4, MIN_WAVE: 3, MAX_W: 5,
   WALL_COST: 2, WALL_W: 3, WALL_CD: 6000, WALL_ARC: 0.5,
@@ -231,12 +232,10 @@ const AI_LV = {
 /* ===== 调试项（待定 / 对比） ===== */
 const DEBUG = [
   { g: '数值' },
-  { id: 'autoIntC', when: () => opt('autoStyle') === 'c', whenNo: '当前自动出兵样式不是“宽阵”，不生效', name: '宽阵出兵间隔', type: 'num', min: 0.5, max: 6, step: 0.5, def: 2, unit: '秒', desc: '“宽阵”样式时，双方每隔多久各出一个方阵（不花兵力）' },
-  { id: 'autoW', when: () => opt('autoStyle') === 'c', whenNo: '当前自动出兵样式不是“宽阵”，不生效',   name: '宽阵宽度',     type: 'num', min: 3, max: 25, step: 1, def: 15, unit: '列' },
-  { id: 'autoD', when: () => opt('autoStyle') === 'c', whenNo: '当前自动出兵样式不是“宽阵”，不生效',   name: '宽阵纵深',     type: 'num', min: 1, max: 4, step: 1, def: 2, unit: '排' },
-  { id: 'autoJit', when: () => opt('autoStyle') === 'c', whenNo: '当前自动出兵样式不是“宽阵”，不生效', name: '宽阵随机偏移', type: 'num', min: 0, max: 6, step: 1, def: 3, unit: '列', desc: '每个方阵左右随机偏移最多几列，双方兵力分布不均，战线会自己起伏' },
-  { id: 'autoInt', when: () => opt('autoStyle') !== 'c', whenNo: '当前自动出兵样式是“宽阵”，不生效', name: '自动出兵间隔', type: 'num', min: 1, max: 8, step: 0.5, def: 3, unit: '秒', desc: '“左中右三组 / 全宽一排”样式时，每隔多久出一批' },
-  { id: 'autoN', when: () => opt('autoStyle') !== 'c', whenNo: '当前自动出兵样式是“宽阵”，不生效',   name: '自动出兵人数', type: 'num', min: 1, max: 6, step: 1, def: 3, unit: '个', desc: '“三组”时为每组人数；“全宽一排”时总数 ×3' },
+  { id: 'autoIntC', name: '宽阵出兵间隔', type: 'num', min: 0.5, max: 6, step: 0.5, def: 2, unit: '秒', desc: '双方每隔多久各出一个方阵（不花兵力）' },
+  { id: 'autoW',   name: '宽阵宽度',     type: 'num', min: 3, max: 25, step: 1, def: 15, unit: '列' },
+  { id: 'autoD',   name: '宽阵纵深',     type: 'num', min: 1, max: 4, step: 1, def: 2, unit: '排' },
+  { id: 'autoJit', name: '宽阵随机偏移', type: 'num', min: 0, max: 6, step: 1, def: 3, unit: '列', desc: '每个方阵左右随机偏移最多几列，双方兵力分布不均，战线会自己起伏' },
   { id: 'regen',   name: '兵员生成间隔', type: 'num', min: 0.3, max: 2, step: 0.05, def: 0.75, unit: '秒', desc: '兵营多久生成 1 个增援兵' },
   { id: 'tmax',    name: '兵力上限',     type: 'num', min: 6, max: 20, step: 1, def: 20, unit: '个', desc: '满兵浪涌门槛 = 上限的 3/4' },
   { id: 'holdStep', name: '蓄兵速度',    type: 'num', min: 0.03, max: 0.2, step: 0.005, def: 0.075, unit: '秒/个', desc: '按住时每多久 +1 个兵' },
@@ -248,39 +247,31 @@ const DEBUG = [
   { id: 'push',    name: '推挤力度',     type: 'num', min: 0, max: 1, step: 0.05, def: 0.3, unit: '格/秒', desc: '双方推力每差 1，交战点每秒被推动多少格' },
   { id: 'wallMax', name: '盾墙最长时间', type: 'num', min: 1, max: 5, step: 0.5, def: 3, unit: '秒' },
   { id: 'hp',      name: '基地血量',     type: 'num', min: 10, max: 80, step: 5, def: 40, unit: '', desc: '下一局生效' },
-  { id: 'rowsAuto', name: '行数自动撑满', type: 'bool', def: true, desc: '按屏幕比例自动决定行数，下一局生效；关掉则用下面的滑块' },
-  { id: 'rows', when: () => !opt('rowsAuto'), whenNo: '“行数自动撑满”开着，不生效',    name: '战场行数',     type: 'num', min: 16, max: 80, step: 2, def: 60, unit: '行', desc: '“行数自动撑满”关掉时生效，下一局生效' },
   { g: '画面' },
   { id: 'phone',   name: '手机比例预览', type: 'bool', def: true, desc: '把游戏区框成 iPhone 18 Pro / Pro Max 的 19.5:9；切换后点“重开”让行数重算' },
   { id: 'pal', name: '配色', type: 'sel', opts: [['sand', '黄土沙场'], ['grass', '青草原野'], ['night', '夜战']], def: 'sand', desc: '地面和双方颜色，立刻生效' },
   { id: 'toon', name: '卡通着色', type: 'bool', def: true, desc: '光影分成几档色阶，翻牌时有一道高光扫过；关掉为普通光照' },
-  { id: 'cols', name: '格子密度', type: 'sel', opts: [['25', '25 列'], ['38', '38 列'], ['50', '50 列']], def: '50', desc: '1 个兵 = 1 块地板；列数越多兵越小越多。速度、方阵宽度、推挤等按比例自动换算，滑块仍按 25 列显示。点“重开”生效' },
-  { id: 'camAngle', name: '镜头角度',   type: 'num', min: 60, max: 90, step: 5, def: 90, unit: '°', desc: '90° 为正俯视（从正上方往下看）；改完点“重开”让行数重算' },
-  { id: 'flipMode', name: '翻转方式',   type: 'sel', opts: [['a', '地面翻牌'], ['b', '地面上翻跟头'], ['c', '果冻']], def: 'a', desc: '果冻：不翻转，前面的地板先缩小再弹大并染色，后面的地板缩小再弹回原色' },
+  { id: 'flipMode', name: '翻转方式',   type: 'sel', opts: [['a', '地面翻牌'], ['b', '地面上翻跟头'], ['c', '果冻']], def: 'a', desc: '果冻：地面不动，兵是地面上的像素块，每走一格先缩小、再弹大、回弹' },
   { id: 'rings',   name: '撞击波纹圈',   type: 'bool', def: true, desc: '相撞、崩碎、打进基地时，地面荡开一圈波纹' },
-  { id: 'ringK',   name: '波纹强度', type: 'num', min: 0, max: 2, step: 0.1, def: 1, unit: '倍', when: () => opt('rings'), whenNo: '“撞击波纹圈”关着，不生效', desc: '1 倍 = v8 调暗后的强度（只有 v7 的一半，且不再泛白）' },
+  { id: 'ringK',   name: '波纹强度', type: 'num', min: 0, max: 2, step: 0.1, def: 1, unit: '倍', when: () => opt('rings'), whenNo: '“撞击波纹圈”关着，不生效', desc: '波纹起伏和明暗有多明显（波纹经过时地板微微倾斜，迎光变亮、背光变暗）' },
+  { id: 'ringW',   name: '波纹泛白', type: 'num', min: 0, max: 100, step: 5, def: 30, unit: '%', when: () => opt('rings'), whenNo: '“撞击波纹圈”关着，不生效', desc: '波纹顶上盖一层白色的浓度；0% 不泛白，100% = v7 那么白' },
   { id: 'flipSound', name: '翻牌声',     type: 'bool', def: true, desc: '翻板翻过去时“嗒”一声，翻得多就叠成哗啦声' },
   { id: 'shadow',  name: '阴影',     type: 'bool', def: true, desc: '卡顿时关掉' },
   { id: 'fline',   name: '战线显示', type: 'bool', def: true, desc: '金色战线，越焦灼越粗越亮；战线后方地面淡淡染色' },
   { id: 'shield',  name: '盾的样子', type: 'ab', a: '半透特效', b: '实体', def: 'a' },
   { id: 'impact',  name: '撞击效果', type: 'ab', a: '卡在翻转中途', b: '受力弯曲', def: 'a' },
-  { id: 'arrow',   name: '箭头阵',   type: 'bool', def: true, desc: '中间先出发，两翼依次跟上；关掉则同时出发' },
-  { id: 'arrowAng', name: '箭头角度', type: 'sel', opts: [['10', '10°'], ['20', '20°'], ['30', '30°']], def: '30', when: () => opt('arrow'), whenNo: '“箭头阵”关着，不生效', desc: '两翼斜边和横线的夹角（按最高速度换算成每列晚出发多久），越小越平' },
-  { id: 'fan',     name: '扇形翻转', type: 'bool', def: true, when: () => opt('flipMode') === 'a', whenNo: '只在“地面翻牌”时生效', desc: '中间正翻，两侧沿 45° 对角线向外翻（仅地面翻牌）' },
-  { id: 'diag',    name: '斜向翻转', type: 'bool', def: true, when: () => opt('flipMode') === 'a', whenNo: '只在“地面翻牌”时生效', desc: '斜着拨时整波沿 45° 对角线翻（仅地面翻牌）' },
-  { id: 'ripple',  name: '波纹带动', type: 'bool', def: true, when: () => opt('flipMode') === 'a', whenNo: '只在“地面翻牌”时生效', desc: '前后格子跟着微翻、染上淡色（仅地面翻牌）' },
+  { id: 'arrow',   name: '箭头阵',   type: 'bool', def: true, desc: '中间先出发，两翼依次跟上（斜边 20°）；关掉则同时出发' },
   { g: '玩法' },
   { id: 'clashMode', name: '交战方式', type: 'sel', opts: [['a', '顶牛推挤'], ['b', '一对一'], ['c', '整波对撞']], def: 'a',
     desc: '顶牛：前排顶住不放，按身后人数比推力，推力大的把交战点往前推，前排逐个磨掉' },
   { id: 'watch',   name: '观战模式', type: 'bool', def: true, desc: '电脑不派增援、不举盾，只看双方自动兵对打' },
-  { id: 'autoStyle', name: '自动出兵样式', type: 'sel', opts: [['c', '宽阵'], ['a', '左中右三组'], ['b', '全宽一排']], def: 'c' },
   { id: 'send',    name: '发兵方式', type: 'ab', a: '长按蓄兵', b: '一拨全发', def: 'a' },
   { id: 'surge',   name: '满兵浪涌', type: 'bool', def: true, desc: '一次派出上限 3/4 以上的兵，带一道压弯大地的冲击波' },
 ];
 const ITEMS = DEBUG.filter(d => d.id);
 // 保存位置固定不变；读不到时，从旧版本的保存里读回你调过的值（作者要求：默认项按上次版本、不再重置）
 const DBG_KEY = 'pixel-legion-debug', OLD_KEYS = ['pixel-legion-debug-v6', 'pixel-legion-debug-v5', 'pixel-legion-debug-v4', 'pixel-legion-debug-v3'];
-const NO_MIGRATE = new Set(['autoStyle']);   // v7 作者指定默认改为宽阵
+const NO_MIGRATE = new Set();
 const DBG = { val: {}, verdict: {} };
 function loadDbg() {
   const read = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
@@ -405,12 +396,12 @@ const tmax = () => opt('tmax');
 const regenMs = () => opt('regen') * 1000;
 const holdMs = () => opt('hold') * 1000;
 const surgeN = () => Math.ceil(tmax() * CFG.SURGE_FRAC);
-const autoMs = () => (opt('autoStyle') === 'c' ? opt('autoIntC') : opt('autoInt')) * 1000;
+const autoMs = () => opt('autoIntC') * 1000;
 
 function newGame(mode, diff) {
   applyPhone();
-  setCols(opt('cols'));
-  setRows(opt('rowsAuto') ? R.autoRows() : clamp(kd(opt('rows')) & ~1, CFG.MIN_ROWS, MAX_ROWS_ALL));
+  setCols(CFG.COLS);
+  setRows(R.autoRows());
   const hp = opt('hp');
   G = { mode, diff, time: 0, over: false, paused: false, frenzy: false, hpMax: hp,
     line: new Float32Array(COLS).fill(HALF), heat: new Float32Array(COLS),
@@ -447,28 +438,21 @@ function formation(col, n, alpha) {
   for (let k = 0; k < n; k++) {
     const j = Math.floor(k / w), inRow = j === rows - 1 ? n - j * w : w, off = Math.floor((w - inRow) / 2);
     const c = c0 + off + (k - j * w), dx = c - cc, ad = Math.abs(dx);
-    const fan = opt('fan') && ad > 0.75 ? Math.sign(dx) * Q : 0;
-    out.push({ c, off: j, wait: wingWait(ad, even), alpha: snapAngle((alpha || 0) + fan) });
+    out.push({ c, off: j, wait: wingWait(ad, even), alpha: snapAngle(alpha || 0) });
   }
   return { list: out, c0, w };
 }
 // 中间先出发，两翼依次跟上（出发时间错开，不是位置错开）
-// v8：按“箭头角度”换算：跑满速时两翼每往外一列落后 tan(角度) 格 → 晚出发 tan(角度) × 每格用时
-function wingWait(ad, even) { return opt('arrow') ? Math.tan((+opt('arrowAng') || 30) * Math.PI / 180) * opt('vmax') * 1000 / KD * Math.max(0, ad - (even ? 0.5 : 0)) : 0; }
+// 箭头角度 20°（已采纳）：跑满速时两翼每往外一列落后 tan(角度) 格 → 晚出发 tan(角度) × 每格用时
+function wingWait(ad, even) { return opt('arrow') ? Math.tan(CFG.ARROW_ANG * Math.PI / 180) * opt('vmax') * 1000 / KD * Math.max(0, ad - (even ? 0.5 : 0)) : 0; }
 // 宽阵：W 列 × D 排的方阵
 function blockFormation(cc, W, D) {
   W = Math.min(COLS, W);
   const c0 = clamp(Math.round(cc - (W - 1) / 2), 0, COLS - W), mid = c0 + (W - 1) / 2, even = W % 2 === 0, out = [];
   for (let j = 0; j < D; j++) for (let k = 0; k < W; k++) {
     const c = c0 + k, dx = c - mid;
-    out.push({ c, off: j, wait: wingWait(Math.abs(dx), even), alpha: opt('fan') && Math.abs(dx) > 0.75 && W <= 7 ? Math.sign(dx) * Q : 0 });
+    out.push({ c, off: j, wait: wingWait(Math.abs(dx), even), alpha: 0 });
   }
-  return { list: out };
-}
-function lineFormation(n) {
-  n = clamp(n, 1, COLS);
-  const out = [];
-  for (let k = 0; k < n; k++) out.push({ c: n === 1 ? Math.floor(COLS / 2) : Math.round(k * (COLS - 1) / (n - 1)), off: 0, alpha: 0 });
   return { list: out };
 }
 
@@ -485,13 +469,10 @@ function sendWave(side, col, n, alpha) {
   return true;
 }
 function queueAuto() {
-  const k = opt('autoN'), style = opt('autoStyle');
+  // 自动出兵固定为“宽阵”（已采纳）
   for (let s = 0; s < 2; s++) {
-    if (style === 'c') {
-      const jit = opt('autoJit') * KD, cc = (COLS - 1) / 2 + Math.round((Math.random() * 2 - 1) * jit);
-      G.queue[s].push({ list: blockFormation(cc, kd(opt('autoW')), kd(opt('autoD'))).list, src: 'auto', delay: 0 });
-    } else if (style === 'b') G.queue[s].push({ list: lineFormation(kd(k * 3)).list, src: 'auto', delay: 0 });
-    else for (const col of [Math.round(COLS * 0.17), Math.floor(COLS / 2), Math.round(COLS * 0.83) - 1]) G.queue[s].push({ list: formation(col, Math.round(k * KD * KD), 0).list, src: 'auto', delay: 0 });
+    const jit = opt('autoJit') * KD, cc = (COLS - 1) / 2 + Math.round((Math.random() * 2 - 1) * jit);
+    G.queue[s].push({ list: blockFormation(cc, kd(opt('autoW')), kd(opt('autoD'))).list, src: 'auto', delay: 0 });
   }
   sfx('auto');
 }
@@ -993,7 +974,7 @@ const R = (() => {
   }
   let ELEV = Math.PI / 2;
   const camDir = new THREE.Vector3();
-  function setAngle() { ELEV = clamp(opt('camAngle'), 60, 90) * Math.PI / 180; camDir.set(0, Math.sin(ELEV), Math.cos(ELEV)); }
+  function setAngle() { camDir.set(0, Math.sin(ELEV), Math.cos(ELEV)); }   // 镜头固定正俯视 90°（已采纳）
   setAngle();
   const center = new THREE.Vector3(COLS / 2, 0, ROWS / 2);
   let layoutDirty = true;
@@ -1066,9 +1047,9 @@ const R = (() => {
   // 镜头：正俯视、不分远近（斜视角不采纳）
   const cam = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 600);
   cam.up.set(0, 0, -1);   // 屏幕上方 = 橙方
-  let shadowOn = true, shake = 0, camAngle = opt('camAngle');
+  let shadowOn = true, shake = 0;
   function fit() {
-    setAngle(); camAngle = opt('camAngle');
+    setAngle();
     const r = stage.getBoundingClientRect(), W = Math.max(1, r.width), H = Math.max(1, r.height);
     renderer.setSize(W, H, false);
     const aspect = W / H, width = COLS + 0.4 * KD, height = (ROWS + 3.4 * KD) * Math.sin(ELEV) + 0.6 * KD * Math.cos(ELEV) + 0.2 * KD;
@@ -1115,8 +1096,9 @@ const R = (() => {
   const sumQ = new Float32Array(MAXVN), tSide = new Int8Array(MAXVN), tAlpha = new Float32Array(MAXVN), tStuck = new Float32Array(MAXVN), tPw = new Uint8Array(MAXVN), tGold = new Uint8Array(MAXVN);
   const rp = new Float32Array(MAXVN), rpSide = new Int8Array(MAXVN), rpLeave = new Int8Array(MAXVN), rpAlpha = new Float32Array(MAXVN);
   const ringY = new Float32Array(MAXVN), surgeY = new Float32Array(MAX_ROWS_ALL + 4), wasDyn = new Uint8Array(MAXVN), halfIdx = new Int16Array(MAXVN);
-  // 果冻（v8）：每块地板被兵盖住多少、当前显示哪一方、弹簧形变
-  const cov = new Float32Array(MAXVN), covSide = new Int8Array(MAXVN), jSide = new Int8Array(MAXVN).fill(-1), jx = new Float32Array(MAXVN), jv = new Float32Array(MAXVN);
+  // 波纹的坡度（v8.1）：让地板跟着波纹倾斜、迎光变亮背光变暗，正俯视也看得见
+  const ringHX = new Float32Array(MAXVN), ringHZ = new Float32Array(MAXVN), qt = new THREE.Quaternion();
+  const LX = -0.7071, LZ = 0.7071;   // 阳光在水平面上的来向（左下方）
   let rippleOn = true;
   const stuckP = u => u.stuck ? 0.001 + clamp(u.stuck.t / Math.max(1, holdMs()), 0, 1) : 0;
 
@@ -1133,7 +1115,6 @@ const R = (() => {
           const i = k * COLS + vc, qv = (P - k) * d + 1;
           if (qv > 0 && qv < 2) {
             sumQ[i] += qv; tSide[i] = u.side; tAlpha[i] = u.alpha;
-            cov[i] += 1 - Math.abs(qv - 1); covSide[i] = u.side;
             if (u.pw > tPw[i]) tPw[i] = u.pw;
             if (u.parried) tGold[i] = 1;
             const sp = stuckP(u); if (sp > tStuck[i]) tStuck[i] = sp;
@@ -1155,16 +1136,15 @@ const R = (() => {
 
   let flipCount = 0, flipT = 0;
   function render(dt) {
-    if (opt('camAngle') !== camAngle) fit();
     const sOn = !!opt('shadow');
     if (sOn !== shadowOn) { shadowOn = sOn; renderer.shadowMap.enabled = sOn; sun.castShadow = sOn; mats.forEach(m => m.needsUpdate = true); }
     syncPalette();
     if (!!opt('toon') !== toonOn) applyToon();
     const t = G ? G.time : now(), roll = opt('flipMode') === 'b', jelly = opt('flipMode') === 'c', sdt = dt / 1000;
-    rippleOn = opt('ripple') && opt('flipMode') === 'a';
-    sumQ.fill(0, 0, VN); tStuck.fill(0, 0, VN); tPw.fill(0, 0, VN); tGold.fill(0, 0, VN); rp.fill(0, 0, VN); ringY.fill(0, 0, VN); surgeY.fill(0); cov.fill(0, 0, VN);
+    rippleOn = opt('flipMode') === 'a';   // 波纹带动（已采纳）：只在地面翻牌时
+    sumQ.fill(0, 0, VN); tStuck.fill(0, 0, VN); tPw.fill(0, 0, VN); tGold.fill(0, 0, VN); rp.fill(0, 0, VN); ringY.fill(0, 0, VN); surgeY.fill(0); ringHX.fill(0, 0, VN); ringHZ.fill(0, 0, VN);
     const units = G ? allUnits() : [];
-    if (G && !roll) for (const u of units) accumulate(u);
+    if (G && !roll && !jelly) for (const u of units) accumulate(u);
     if (G) {
       for (const sg of G.surges) for (let r = 0; r < ROWS; r++) {
         const x = ((sg.pos - r) * DIR[sg.side] + 0.6 * KD) / KD;
@@ -1179,9 +1159,11 @@ const R = (() => {
         const c0 = Math.max(0, Math.floor(rg.x - reach)), c1 = Math.min(COLS - 1, Math.ceil(rg.x + reach));
         const r0 = Math.max(0, Math.floor(rg.z - reach)), r1 = Math.min(ROWS - 1, Math.ceil(rg.z + reach));
         for (let vr = r0; vr <= r1; vr++) for (let vc = c0; vc <= c1; vc++) {
-          const dx = vc + 0.5 - rg.x, dz = vr + 0.5 - rg.z, dd = Math.sqrt(dx * dx + dz * dz) / KD - R0;
+          const dx = vc + 0.5 - rg.x, dz = vr + 0.5 - rg.z, dist = Math.sqrt(dx * dx + dz * dz), dd = dist / KD - R0;
           if (dd > 1.2 || dd < -1.6) continue;
-          ringY[vr * COLS + vc] += A * Math.cos(dd * 3.2) * Math.exp(-dd * dd * 1.4);
+          const e = Math.exp(-dd * dd * 1.4), j = vr * COLS + vc;
+          ringY[j] += A * Math.cos(dd * 3.2) * e;
+          if (dist > 0.01) { const sl = A * e * (-3.2 * Math.sin(dd * 3.2) - 2.8 * dd * Math.cos(dd * 3.2)) / KD / dist; ringHX[j] += sl * dx; ringHZ[j] += sl * dz; }
         }
       }
     }
@@ -1189,28 +1171,8 @@ const R = (() => {
     let flips = 0;
     for (let i = 0; i < VN; i++) {
       const vr = (i / COLS) | 0, vc = i % COLS, gc = vc, gz = vr + 0.5;
-      let phi = 0, side = -1, alpha = 0, h = TH, dyn = false, js = 1, hl = 0;
-      if (jelly) {
-        // 果冻：不翻转。盖住过半时换色（藏在缩到最小的一瞬间），然后弹簧回弹、略微变大
-        const cv0 = cov[i], cur = jSide[i];
-        let occ = cur;
-        if (cur < 0 && cv0 > 0.55) occ = covSide[i]; else if (cur >= 0 && cv0 < 0.45) occ = -1; else if (cur >= 0 && cv0 > 0.55) occ = covSide[i];
-        if (occ !== cur) { jSide[i] = occ; jv[i] += 4.5; flips++; }
-        if (jx[i] !== 0 || jv[i] !== 0) {
-          const st = Math.min(sdt, 0.033);
-          jv[i] += (-140 * jx[i] - 11 * jv[i]) * st; jx[i] += jv[i] * st;
-          if (Math.abs(jx[i]) < 0.002 && Math.abs(jv[i]) < 0.02) jx[i] = jv[i] = 0;
-          dyn = true;
-        }
-        const bump = cv0 > 0 && cv0 < 1 ? Math.max(0, 1 - Math.abs(cv0 - 0.5) * 2) : 0;
-        js = (1 - 0.42 * bump) * (1 + jx[i]);
-        if (bump > 0) dyn = true;
-        side = jSide[i];
-        if (side >= 0) {
-          phi = Math.PI; h = SHT + (Math.max(1, tPw[i]) - 1) * PWT;
-          if (tStuck[i] && opt('impact') === 'a') js *= 1 + Math.sin(t / 30 + i) * 0.04;
-        }
-      } else if (sumQ[i] > 0.001) {
+      let phi = 0, side = -1, alpha = 0, h = TH, dyn = false, hl = 0;
+      if (sumQ[i] > 0.001) {
         side = tSide[i]; alpha = tAlpha[i];
         phi = Math.PI * sumQ[i];
         const wgt = (1 - Math.cos(phi)) / 2;
@@ -1223,20 +1185,22 @@ const R = (() => {
         dyn = true;
       }
       // 卡通高光：翻板转到斜对着太阳时亮一下，一波翻过去就像一道高光扫过
-      if (toonOn && !jelly && sumQ[i] > 0.001) { const f = (phi / Math.PI) % 1; hl = 0.5 * Math.exp(-Math.pow((f - 0.3) / 0.11, 2)); }
-      const bend = !jelly && tStuck[i] && opt('impact') === 'b' ? Math.min(1, tStuck[i]) : 0;
+      if (toonOn && sumQ[i] > 0.001) { const f = (phi / Math.PI) % 1; hl = 0.5 * Math.exp(-Math.pow((f - 0.3) / 0.11, 2)); }
+      const bend = tStuck[i] && opt('impact') === 'b' ? Math.min(1, tStuck[i]) : 0;
       if (bend) phi = Math.PI, h *= 1 - 0.25 * bend;
       const yOff = ringY[i] + surgeY[vr];
       if (yOff !== 0) dyn = true;
       // 翻牌声：翻板转过竖直位置时算“嗒”一声
       const hi = Math.floor(phi / Math.PI + 0.5);
-      if (hi !== halfIdx[i]) { if (sumQ[i] > 0.001 && !jelly) flips++; halfIdx[i] = hi; }
+      if (hi !== halfIdx[i]) { if (sumQ[i] > 0.001) flips++; halfIdx[i] = hi; }
+      const hx = ringHX[i], hz = ringHZ[i], tilt = hx !== 0 || hz !== 0;
+      if (tilt) dyn = true;
       if (dyn || wasDyn[i] || layoutDirty) {
         if (side >= 0) q.setFromAxisAngle(axisFor(side, alpha), phi); else q.identity();
+        if (tilt) q.premultiply(qt.setFromEuler(eu.set(-Math.atan(hz), 0, Math.atan(hx))));
         const lift = Math.abs(Math.sin(phi)) * Math.max(0, VT / 2 - h / 2);
-        const sy = h / TH * (jelly ? 1 + (1 - js) * 0.9 : 1);
-        const y = h * (jelly ? 1 + (1 - js) * 0.9 : 1) / 2 + lift + yOff;
-        pv.set(vc + 0.5, y, gz); sv.set(js, sy, js);
+        const y = h / 2 + lift + yOff;
+        pv.set(vc + 0.5, y, gz); sv.set(1, h / TH, 1);
         m4.compose(pv, q, sv);
         if (bend) {
           const d = DIR[side], kx = (gc % 2 ? 1 : -1) * 0.25 * bend, kz = -d * 0.7 * bend, ty = y - h / 2;
@@ -1250,8 +1214,14 @@ const R = (() => {
       if (fl) tc.lerp(col.soft[gz > G.line[gc] + 0.5 ? 0 : 1], 0.16);
       if (rp[i] > 0.01 && sumQ[i] <= 0.001) tc.lerp(col.soft[rpSide[i]], rp[i] * 0.8);
       if (hl) tc.lerp(col.white, hl * 0.6);
+      // 波纹明暗（迎光亮、背光暗）+ 可调的泛白
+      let shade = 0, wh = 0;
+      if (tilt) shade = clamp(-(hx * LX + hz * LZ) * 2.4, -0.4, 0.4);
+      if (yOff > 0.01 && ringY[i] > 0) wh = opt('ringW') / 100 * Math.min(0.35, ringY[i] * 5);
+      if (shade) tc.multiplyScalar(1 + shade);
+      if (wh) tc.lerp(col.white, wh);
       top.setColorAt(i, tc);
-      if (side >= 0) { tc.copy(col.unit[side]); if (tGold[i]) tc.lerp(col.gold, 0.35); if (hl) tc.lerp(col.white, hl); } else tc.copy(col.under);
+      if (side >= 0) { tc.copy(col.unit[side]); if (tGold[i]) tc.lerp(col.gold, 0.35); if (hl) tc.lerp(col.white, hl); if (shade) tc.multiplyScalar(1 + shade); if (wh) tc.lerp(col.white, wh); } else tc.copy(col.under);
       bot.setColorAt(i, tc);
     }
     layoutDirty = false;
@@ -1262,6 +1232,31 @@ const R = (() => {
 
     // 翻跟头模式：小兵是地面上的薄板，以前边贴地的边为轴向前翻
     let ui = 0, rollFlips = 0;
+    if (G && jelly) {
+      // 果冻（v8.1）：地面不动；兵是地面上的像素块，每走一格：先缩小（被挤扁）→ 跳到下一格 → 弹大 → 回弹
+      for (const u of units) {
+        if (ui >= UMAX) break;
+        const d = DIR[u.side], a = adv(u), base = Math.floor(a), f = a - base;
+        const cur = SPAWN[u.side] + d * base;
+        if (!onBoard(cur) && !onBoard(cur + d)) continue;
+        if (u.lastBase !== undefined && u.lastBase !== base) rollFlips++;
+        u.lastBase = base;
+        const mv = clamp((f - 0.15) / 0.45, 0, 1), ease = mv * mv * (3 - 2 * mv);   // 缩小时挪过去
+        let sxz = f < 0.5 ? 1 - 0.34 * Math.sin(2 * Math.PI * f) : 1 - 0.16 * Math.sin(2 * Math.PI * f);
+        if (u.stuck) sxz = 1 + (opt('impact') === 'a' ? Math.sin(t / 30 + u.id) * 0.06 : -0.12 * stuckP(u));
+        const hh = (SH + (u.pw - 1) * CFG.PW_H) * (1 + (1 - sxz) * 1.1);
+        const row = clamp(cur, 0, ROWS - 1), ry = ringY[row * COLS + clamp(u.c, 0, COLS - 1)] || 0;
+        const pz = u.stuck ? u.pos + 0.5 : cur + 0.5 + d * ease;
+        pv.set(u.c + 0.5, TH + hh / 2 + surgeY[row] + ry, pz); q.identity(); sv.set(sxz, hh / SH, sxz);
+        m4.compose(pv, q, sv);
+        uTop.setMatrixAt(ui, m4); uBot.setMatrixAt(ui, m4);
+        tc.copy(col.unit[u.side]); if (u.parried) tc.lerp(col.gold, 0.35);
+        if (toonOn && sxz > 1.02) tc.lerp(col.white, (sxz - 1) * 1.2);
+        uTop.setColorAt(ui, tc); tc.copy(col.back[u.side]); uBot.setColorAt(ui, tc);
+        ui++;
+      }
+      if (rollFlips && opt('flipSound') && dt > 0) sfx('flip', rollFlips * 3);
+    }
     if (G && roll) {
       for (const u of units) {
         if (ui >= UMAX) break;
@@ -1418,7 +1413,7 @@ const R = (() => {
     renderer.render(scene, cam);
     cam.position.copy(s0);
   }
-  function clearFx() { frags.length = 0; bk[0].length = 0; bk[1].length = 0; flipCount = 0; jSide.fill(-1); jx.fill(0); jv.fill(0); }
+  function clearFx() { frags.length = 0; bk[0].length = 0; bk[1].length = 0; flipCount = 0; }
   return { fit, layout, autoRows, render, pick, burst, launch, clearFx, shake: v => { shake = Math.max(shake, v); } };
 })();
 
@@ -1528,7 +1523,6 @@ function endPtr(e, cancel) {
   const dx = e.clientX - p.x0, dy = e.clientY - p.y0, f = fwd(side, dy);
   if (f >= TH) {
     let alpha = 0;
-    if (opt('diag') && opt('flipMode') === 'a') { const a = side === 0 ? Math.atan2(dx, -dy) : Math.atan2(dx, dy); if (Math.abs(a) > Math.PI / 8) alpha = Math.sign(a) * Q; }
     const cell = R.pick(e.clientX, e.clientY);
     sendWave(side, cell ? clamp(cell.c, 0, COLS - 1) : p.c, holdCount(side, p), alpha);
   }
@@ -1609,7 +1603,7 @@ $('#dbgList').addEventListener('input', e => {
 function dbgSummary() {
   const n = new Date(), day = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
   const tag = { yes: '采纳', no: '不采纳', wait: '待定' };
-  let out = `像素小兵 v8 调试结论（${day}）\n格式：项目（结论）：当前值。结论针对整个项目，与当前值无关`;
+  let out = `像素小兵 v8.1 调试结论（${day}）\n格式：项目（结论）：当前值。结论针对整个项目，与当前值无关`;
   for (const d of DEBUG) {
     if (d.g) { out += `\n【${d.g}】`; continue; }
     const v = DBG.val[d.id];
@@ -1693,8 +1687,8 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 window.__pl = { get G() { return G; }, newGame, sendWave, raiseWall, dropWall, flick, update, render: d => R.render(d), DBG, opt, CFG, formation, get ROWS() { return ROWS; }, statsRows };
-setCols(opt('cols'));
-setRows(opt('rowsAuto') ? R.autoRows() : clamp(kd(opt('rows')) & ~1, CFG.MIN_ROWS, MAX_ROWS_ALL));
+setCols(CFG.COLS);
+setRows(R.autoRows());
 R.layout();
 setToolbar();
 requestAnimationFrame(frame);
