@@ -86,6 +86,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
 .it.off{background:var(--panel)}
 .it.off .it-name,.it.off .it-desc,.it.off .it-val,.it.off input,.it.off .seg,.it.off .sw{opacity:.4}
 .it-off{font-size:11.5px;color:var(--gold);line-height:1.35}
+.clr{width:44px;height:26px;padding:0;border:1px solid var(--line);background:none;cursor:pointer;flex:none}
 .it input[type=range]{width:100%;accent-color:var(--blue);margin:0}
 .sw{position:relative;width:40px;height:22px;border-radius:11px;background:var(--line);border:none;cursor:pointer;flex:none;padding:0}
 .sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--muted);transition:transform .15s}
@@ -139,7 +140,7 @@ h1{font-family:var(--f-cn);font-weight:400;font-size:42px;margin:0;line-height:1
 <div id="shell">
   <aside id="dbg" aria-label="调试栏">
     <button class="dbg-mini" id="dbgOpen" aria-label="展开调试栏">调试</button>
-    <div class="dbg-head"><h2>调试栏</h2><span class="tag">v8.2</span><button class="x" id="dbgClose" aria-label="收窄调试栏">收起</button></div>
+    <div class="dbg-head"><h2>调试栏</h2><span class="tag">v8.3</span><button class="x" id="dbgClose" aria-label="收窄调试栏">收起</button></div>
     <p class="dbg-note">开关和滑块随时调、立刻生效（标“下一局”的除外）。试完给每一项标上采纳或不采纳，结论保存在这台设备上。</p>
     <div class="dbg-list" id="dbgList"></div>
     <div class="dbg-foot">
@@ -178,6 +179,7 @@ h1{font-family:var(--f-cn);font-weight:400;font-size:42px;margin:0;line-height:1
             <button class="btn main" data-mode="ai" data-diff="normal">人机 · 普通</button>
             <button class="btn" data-mode="ai" data-diff="hard">人机 · 困难</button>
             <button class="btn" data-mode="duo">同屏双人</button>
+            <button class="btn" data-mode="ai" data-watch="1">观战（电脑不操作）</button>
           </div>
           <ul class="how">
             <li><b>按住 → 移动瞄准 → 上拨</b>：从松手那一列派出增援（至少 3 个）</li>
@@ -243,35 +245,35 @@ const DEBUG = [
   { id: 'vmin',    name: '起步速度',     type: 'num', min: 0.15, max: 1, step: 0.05, def: 0.4, unit: '秒/格', desc: '刚出发时每走一格要多久' },
   { id: 'accelT',  name: '加速时长',     type: 'num', min: 0.2, max: 4, step: 0.1, def: 1.5, unit: '秒', desc: '从起步速度加到最高速度要多久' },
   { id: 'hold',    name: '僵持时长',     type: 'num', min: 0, max: 0.8, step: 0.05, def: 0.3, unit: '秒', desc: '撞上后先卡住多久，才开始消耗' },
-  { id: 'scrumT',  name: '顶牛消耗',     type: 'num', min: 0.2, max: 3, step: 0.1, def: 0.9, unit: '秒/兵', desc: '一对一顶着时，多久磨掉一个前排；对面推力越大磨得越快' },
-  { id: 'push',    name: '推挤力度',     type: 'num', min: 0, max: 1, step: 0.05, def: 0.3, unit: '格/秒', desc: '双方推力每差 1，交战点每秒被推动多少格' },
   { id: 'wallMax', name: '盾墙最长时间', type: 'num', min: 1, max: 5, step: 0.5, def: 3, unit: '秒' },
   { id: 'hp',      name: '基地血量',     type: 'num', min: 10, max: 80, step: 5, def: 40, unit: '', desc: '下一局生效' },
   { g: '画面' },
   { id: 'phone',   name: '手机比例预览', type: 'bool', def: true, desc: '把游戏区框成 iPhone 18 Pro / Pro Max 的 19.5:9；切换后点“重开”让行数重算' },
-  { id: 'pal', name: '配色', type: 'sel', opts: [['sand', '黄土沙场'], ['grass', '青草原野'], ['night', '夜战']], def: 'sand', desc: '地面和双方颜色，立刻生效' },
+  { id: 'pal', name: '配色', type: 'sel', opts: [['sand', '黄土沙场'], ['grass', '青草原野'], ['night', '夜战'], ['custom', '自定义']], def: 'sand', desc: '地面和双方颜色，立刻生效；选“自定义”后用下面 4 个取色框自己配' },
+  { id: 'cGround', name: '自定义 · 地面', type: 'color', def: '#a48256', when: () => opt('pal') === 'custom', whenNo: '配色选“自定义”时生效' },
+  { id: 'cSeam',   name: '自定义 · 地面格缝', type: 'color', def: '#3a2a18', when: () => opt('pal') === 'custom', whenNo: '配色选“自定义”时生效' },
+  { id: 'cBlue',   name: '自定义 · 蓝方（下方）', type: 'color', def: '#2f4fb4', when: () => opt('pal') === 'custom', whenNo: '配色选“自定义”时生效', desc: '兵的背面深色、战线后方的淡染色按这个颜色自动算' },
+  { id: 'cRed',    name: '自定义 · 红方（上方）', type: 'color', def: '#cf3326', when: () => opt('pal') === 'custom', whenNo: '配色选“自定义”时生效' },
   { id: 'toon', name: '卡通着色', type: 'bool', def: true, desc: '光影分成几档色阶，翻牌时有一道高光扫过；关掉为普通光照' },
-  { id: 'flipMode', name: '翻转方式',   type: 'sel', opts: [['a', '地面翻牌'], ['b', '地面上翻跟头'], ['c', '果冻·同步跳'], ['d', '果冻·平滑波']], def: 'a', desc: '果冻·同步跳：同一波兵统一节拍跳格子，前后沿同时起落；果冻·平滑波：兵平滑前进，一道缩放波从箭头尖荡向两翼' },
+  { id: 'flipMode', name: '翻转方式',   type: 'sel', opts: [['a', '地面翻牌'], ['b', '地面上翻跟头'], ['e', '果冻·各自跳'], ['c', '果冻·同步跳'], ['f', '果冻·波浪跳'], ['d', '果冻·平滑波']], def: 'a', desc: '果冻（地面不动，兵自己缩放）：各自跳 = v8.1 每个兵各弹各的；同步跳 = 整波统一节拍；波浪跳 = 前后两排相位相反、沿斜边错开，像波浪一层层推进；平滑波 = 平滑前进，缩放波从中间荡向两翼。撞上时双方都弹到最大' },
   { id: 'rings',   name: '撞击波纹圈',   type: 'bool', def: true, desc: '相撞、崩碎、打进基地时，地面荡开一圈波纹' },
   { id: 'ringK',   name: '波纹强度', type: 'num', min: 0, max: 2, step: 0.1, def: 1, unit: '倍', when: () => opt('rings'), whenNo: '“撞击波纹圈”关着，不生效', desc: '波纹起伏和明暗有多明显（波纹经过时地板微微倾斜，迎光变亮、背光变暗）' },
   { id: 'ringW',   name: '波纹泛白', type: 'num', min: 0, max: 100, step: 5, def: 30, unit: '%', when: () => opt('rings'), whenNo: '“撞击波纹圈”关着，不生效', desc: '波纹顶上盖一层白色的浓度；0% 不泛白，100% = v7 那么白' },
-  { id: 'flipSound', name: '翻牌声',     type: 'bool', def: true, desc: '翻板翻过去时“嗒”一声，翻得多就叠成哗啦声' },
   { id: 'shadow',  name: '阴影',     type: 'bool', def: true, desc: '卡顿时关掉' },
   { id: 'fline',   name: '战线显示', type: 'bool', def: true, desc: '金色战线，越焦灼越粗越亮；战线后方地面淡淡染色' },
   { id: 'shield',  name: '盾的样子', type: 'ab', a: '半透特效', b: '实体', def: 'a' },
   { id: 'impact',  name: '撞击效果', type: 'ab', a: '卡在翻转中途', b: '受力弯曲', def: 'a' },
   { id: 'flash',   name: '碰撞闪白', type: 'bool', def: true, desc: '撞上的瞬间整块兵变白，0.2 秒内褪回' },
-  { id: 'kb',      name: '碰撞击退', type: 'sel', opts: [['off', '关'], ['bounce', '弹开回位'], ['real', '真的后退']], def: 'bounce', desc: '撞上时随机向后弹 0.3～0.8 格。弹开回位：只是画面，弹完回原位；真的后退：兵真的被撞回去，再冲上来顶住（每次交锋只退一次）' },
+  { id: 'kb',      name: '碰撞击退', type: 'sel', opts: [['off', '关'], ['bounce', '弹开回位'], ['real', '真的后退']], def: 'bounce', desc: '撞上时随机向后弹（距离见下一项）。弹开回位：只是画面，弹完回原位；真的后退：兵真的被撞回去，再冲上来（每次交锋只退一次）' },
+  { id: 'kbDist',  name: '击退距离', type: 'num', min: 0.5, max: 6, step: 0.5, def: 3, unit: '格', when: () => opt('kb') !== 'off', whenNo: '“碰撞击退”关着，不生效', desc: '每次随机退“设定值的一半到全部”，例如 3 格 = 随机退 1.5～3 格' },
   { id: 'hitstop', name: '碎裂顿帧', type: 'sel', opts: [['off', '关'], ['local', '只定住碎的兵'], ['global', '整个画面停']], def: 'local', desc: '只定住碎的兵：碎之前变白、鼓大、抖 0.08 秒再炸开；整个画面停：碎的瞬间全场停 0.06 秒（最多每 0.3 秒一次），打进基地停更久' },
+  { id: 'debris',  name: '碎块方向', type: 'bool', def: true, desc: '碎块朝被撞的方向（往自己身后）飞，而不是四面散开' },
+  { id: 'charge',  name: '冲锋蓄力', type: 'bool', def: true, desc: '每波出发前整波先压扁 0.18 秒，再拉长弹射出去' },
   { id: 'squash',  name: '撞击挤扁', type: 'bool', def: true, desc: '撞上时沿前进方向被压扁、横向变宽，再回弹' },
   { id: 'pop',     name: '出生弹出', type: 'bool', def: true, desc: '兵进入战场时从小弹到大，再回弹一下' },
   { id: 'combo',   name: '连碎音阶', type: 'bool', def: true, desc: '短时间内连续碎兵，每碎一个音调升高一级' },
   { id: 'punch',   name: '镜头推一下', type: 'bool', def: true, desc: '大面积相撞、整屏顿帧、打进基地时，画面瞬间放大一点再回来' },
-  { id: 'arrow',   name: '箭头阵',   type: 'bool', def: true, desc: '中间先出发，两翼依次跟上（斜边 20°）；关掉则同时出发' },
   { g: '玩法' },
-  { id: 'clashMode', name: '交战方式', type: 'sel', opts: [['a', '顶牛推挤'], ['b', '一对一'], ['c', '整波对撞']], def: 'a',
-    desc: '顶牛：前排顶住不放，按身后人数比推力，推力大的把交战点往前推，前排逐个磨掉' },
-  { id: 'watch',   name: '观战模式', type: 'bool', def: true, desc: '电脑不派增援、不举盾，只看双方自动兵对打' },
   { id: 'send',    name: '发兵方式', type: 'ab', a: '长按蓄兵', b: '一拨全发', def: 'a' },
   { id: 'surge',   name: '满兵浪涌', type: 'bool', def: true, desc: '一次派出上限 3/4 以上的兵，带一道压弯大地的冲击波' },
 ];
@@ -317,7 +319,15 @@ const PALS = {
            clear: '#0b0d11', rim: '#12151a', pit: '#030405', camp: '#181c23', post: '#8b94a1', hemiSky: 0xe8eeff, hemiGround: 0x1b2029, sun: 0xffffff, hemiI: 0.6, sunI: 0.85, ui: ['#2f6bff', '#ff7a1a'] },
 };
 const HEX = Object.assign({}, PALS.night);
+// 自定义配色：4 个颜色，其余自动算
+const hexMix = (a, b, t) => { const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16); let o = 0; for (const sh of [16, 8, 0]) o |= Math.round(((pa >> sh) & 255) * (1 - t) + ((pb >> sh) & 255) * t) << sh; return '#' + o.toString(16).padStart(6, '0'); };
+const palKey = () => opt('pal') === 'custom' ? 'custom' + opt('cGround') + opt('cSeam') + opt('cBlue') + opt('cRed') : opt('pal');
 function applyPalette() {
+  if (opt('pal') === 'custom') {
+    const g = opt('cGround'), seam = opt('cSeam'), u = [opt('cBlue'), opt('cRed')];
+    PALS.custom = Object.assign({}, PALS.sand, { neutral: g, neutralHi: hexMix(g, '#ffffff', 0.05), under: hexMix(g, '#000000', 0.55), pit: seam, rim: hexMix(seam, g, 0.35), camp: hexMix(g, '#000000', 0.2), clear: hexMix(seam, '#000000', 0.4),
+      unit: u, back: u.map(c => hexMix(c, '#000000', 0.55)), soft: u.map(c => hexMix(c, g, 0.45)), dark: u.map(c => hexMix(c, '#000000', 0.35)), ui: u });
+  }
   Object.assign(HEX, PALS[opt('pal')] || PALS.sand);
   const st = document.documentElement.style; st.setProperty('--blue', HEX.ui[0]); st.setProperty('--orange', HEX.ui[1]);
 }
@@ -406,17 +416,17 @@ const holdMs = () => opt('hold') * 1000;
 const surgeN = () => Math.ceil(tmax() * CFG.SURGE_FRAC);
 const autoMs = () => opt('autoIntC') * 1000;
 
-function newGame(mode, diff) {
+function newGame(mode, diff, watch) {
   applyPhone();
   setCols(CFG.COLS);
   setRows(R.autoRows());
   const hp = opt('hp');
   G = { mode, diff, time: 0, over: false, paused: false, frenzy: false, hpMax: hp,
     line: new Float32Array(COLS).fill(HALF), heat: new Float32Array(COLS),
-    waves: [], hitters: [], clashes: [], duels: [], scrums: [], walls: [], snaps: [], surges: [], rings: [], flyers: [], ptr: [null, null],
+    waves: [], hitters: [], duels: [], walls: [], snaps: [], surges: [], rings: [], flyers: [], ptr: [null, null],
     queue: [[], []], autoT: autoMs() - 1200,
     ai: { t: 900, want: 0 }, dying: [], freeze: 0, stopT: -1e9, combo: 0, comboT: -1e9, sides: [mkSide(0, hp), mkSide(1, hp)] };
-  lastSetup = { mode, diff };
+  lastSetup = { mode, diff, watch: !!watch }; G.watch = !!watch;
   R.layout(); R.clearFx();
   buildBars(); hideOverlays(); setToolbar();
   if (firstGame) showHint();
@@ -438,8 +448,9 @@ function killUnit(u, killer, by, n) {
   if (!onBoard(Math.round(u.pos))) return;
   // 碎裂顿帧（v8.2）：只定住碎的兵 → 先画 0.08 秒“变白鼓大”再炸；整个画面停 → 全场停一下
   const hs = opt('hitstop');
-  if (hs === 'local') G.dying.push({ x: u.c + 0.5, z: u.pos + 0.5, side: u.side, n: n || 8, t: 0, pw: u.pw });
-  else R.burst(u.c + 0.5, 0.2, u.pos + 0.5, HEX.unit[u.side], n || 8, 1);
+  const dz = opt('debris') ? -DIR[u.side] : 0;   // 碎块方向：往自己身后飞
+  if (hs === 'local') G.dying.push({ x: u.c + 0.5, z: u.pos + 0.5, side: u.side, n: n || 8, t: 0, pw: u.pw, dz });
+  else R.burst(u.c + 0.5, 0.2, u.pos + 0.5, HEX.unit[u.side], n || 8, 1, dz);
   if (hs === 'global') hitStop(60);
   // 连碎音阶：0.45 秒内接连碎兵，音调一级级升高
   if (opt('combo')) { G.combo = G.time - G.comboT < 450 ? G.combo + 1 : 0; G.comboT = G.time; sfx('note', G.combo); }
@@ -452,8 +463,9 @@ function hitStop(ms, force) {
 // 碰撞反馈（v8.2）：闪白、挤扁、弹开回位（只是画面）
 function hitFx(x) {
   x.flT = x.sqT = G.time;
-  if (opt('kb') === 'bounce') { x.kbT = G.time; x.kbA = (0.3 + Math.random() * 0.5) * KD; }
+  if (opt('kb') === 'bounce') { x.kbT = G.time; x.kbA = kbAmt(); }
 }
+const kbAmt = () => opt('kbDist') * (0.5 + 0.5 * Math.random()) * KD;   // 击退距离：设定值的一半到全部
 // 真的后退：把兵和身后挨着的己方兵一起往回推
 function pushBack(u, amt) {
   const dir = DIR[u.side], back = allUnits().filter(x => x !== u && x.side === u.side && x.c === u.c && !x.stuck && !x.hitting && adv(x) < adv(u)).sort((a, b) => adv(b) - adv(a));
@@ -476,7 +488,7 @@ function formation(col, n, alpha) {
 }
 // 中间先出发，两翼依次跟上（出发时间错开，不是位置错开）
 // 箭头角度 20°（已采纳）：跑满速时两翼每往外一列落后 tan(角度) 格 → 晚出发 tan(角度) × 每格用时
-function wingWait(ad, even) { return opt('arrow') ? Math.tan(CFG.ARROW_ANG * Math.PI / 180) * opt('vmax') * 1000 / KD * Math.max(0, ad - (even ? 0.5 : 0)) : 0; }
+function wingWait(ad, even) { return Math.tan(CFG.ARROW_ANG * Math.PI / 180) * opt('vmax') * 1000 / KD * Math.max(0, ad - (even ? 0.5 : 0)); }   // 箭头阵（已采纳，固定开）
 // 宽阵：W 列 × D 排的方阵
 function blockFormation(cc, W, D) {
   W = Math.min(COLS, W);
@@ -524,6 +536,7 @@ function processQueue(dt) {
       q.splice(i--, 1);
       const wave = newWave(s);
       wave.delay = e.src === 'auto' ? 120 : 0;
+      if (opt('charge')) { wave.delay = Math.max(wave.delay, 180); wave.chargeT = G.time; }   // 冲锋蓄力：先压扁再弹射
       for (const p of e.list) {
         const u = { id: ++uid, side: s, c: p.c, o: SPAWN[s], off: p.off, wait: p.wait || 0, d: 0, runT: 0, pos: 0, pw: 1, wave, dead: false, alpha: p.alpha, stuck: null, parried: false, src: e.src };
         u.pos = upos(u); wave.units.push(u);
@@ -590,28 +603,19 @@ function engage(u, e) {
   if (G.time - (G.engT || -1e9) < 250) G.engN = (G.engN || 0) + 1; else G.engN = 1;
   G.engT = G.time;
   if (G.engN === 8) { R.shake(0.07); if (opt('punch')) R.punch(0.02); }
-  const mode = opt('clashMode');
   hitFx(u); hitFx(e);
   // 真的后退（v8.2）：第一次相撞双方各被随机撞退一段，愣 0.12 秒再冲上来；第二次才顶住
-  if (opt('kb') === 'real' && mode !== 'c' && !(u.kbDone && e.kbDone)) {
-    for (const x of [u, e]) { if (x.kbDone) continue; x.kbDone = true; pushBack(x, (0.3 + Math.random() * 0.5) * KD); x.kbUntil = G.time + 120; x.runT = Math.min(x.runT, 300); }
+  if (opt('kb') === 'real' && !(u.kbDone && e.kbDone)) {
+    for (const x of [u, e]) { if (x.kbDone) continue; x.kbDone = true; pushBack(x, kbAmt()); x.kbUntil = G.time + 120; x.runT = Math.min(x.runT, 300); }
     sfx('boom'); ring(u.c, (u.pos + e.pos) / 2 + 0.5, 0.8);
     R.burst(u.c + 0.5, 0.35, (u.pos + e.pos) / 2 + 0.5, '#ffffff', 2, 0.6);
     return;
   }
-  if (mode === 'c') { startClash(u.wave, e.wave); return; }
+  // 交战方式：一对一（已采纳）——撞上僵持后按力量相减
   const z = (u.pos + e.pos) / 2;
-  if (mode === 'a') {
-    const f = [null, null]; f[u.side] = u; f[e.side] = e;
-    const sc = { kind: 'scrum', c: u.c, x: z, f, t: 0, dmg: [0, 0], P: [1, 1] };
-    u.stuck = e.stuck = sc;
-    placeFronts(sc);
-    G.scrums.push(sc);
-  } else {
-    const d = { kind: 'duel', a: u, b: e, t: 0, at: holdMs(), z: z + 0.5, c: u.c };
-    u.stuck = e.stuck = d;
-    G.duels.push(d);
-  }
+  const d = { kind: 'duel', a: u, b: e, t: 0, at: holdMs(), z: z + 0.5, c: u.c };
+  u.stuck = e.stuck = d;
+  G.duels.push(d);
   sfx('boom'); sfx('hum', holdMs() + 200);
   ring(u.c, z + 0.5, 1);
   R.burst(u.c + 0.5, 0.35, z + 0.5, '#ffffff', 2, 0.6);
@@ -621,98 +625,10 @@ function freeUnit(u) {
   const s = u.stuck;
   if (!s) return;
   if (s.kind === 'duel') { const o = s.a === u ? s.b : s.a; if (o && !o.dead) { o.stuck = null; o.runT = 0; } s.done = true; }
-  if (s.kind === 'scrum') { s.f[u.side] = null; }
   u.stuck = null;
 }
 
-/* ===== 顶牛推挤（默认）：前排顶住，按身后人数比推力 ===== */
-function placeFronts(sc) {
-  if (sc.f[0]) setUPos(sc.f[0], sc.x + 0.5);
-  if (sc.f[1]) setUPos(sc.f[1], sc.x - 0.5);
-}
-function columnUnits(c, s) { const a = []; for (const u of allUnits()) if (u.c === c && u.side === s && !u.hitting) a.push(u); return a; }
-function updateScrums(dt) {
-  // 每帧先按列分好兵（v8：50 列时兵多，避免每个交战点都扫一遍全场）
-  const byCol = []; for (let c = 0; c < COLS; c++) byCol.push([]);
-  for (const u of allUnits()) if (!u.hitting && u.c >= 0 && u.c < COLS) byCol[u.c].push(u);
-  const colU = (c, s) => byCol[c].filter(u => u.side === s && !u.dead && !u.hitting);
-  const sideN = kd(1);
-  for (const sc of G.scrums) {
-    if (sc.done) continue;
-    sc.t += dt;
-    // 前排倒下，身后紧挨着的顶上来
-    for (let s = 0; s < 2; s++) {
-      if (sc.f[s] && !sc.f[s].dead && sc.f[s].side === s) continue;
-      sc.f[s] = null;
-      let best = null;
-      for (const u of colU(sc.c, s)) {
-        if (u.stuck || u.wave.state !== 'move' || u.wave.delay > 0) continue;
-        const gap = (sc.x - u.pos) * DIR[s];   // 从自己这边到交战点还有多远
-        if (gap >= -0.2 && gap <= 1.6 && (!best || gap < (sc.x - best.pos) * DIR[s])) best = u;
-      }
-      if (best) { best.stuck = sc; sc.f[s] = best; sc.dmg[s] = 0; }
-    }
-    if (!sc.f[0] || !sc.f[1]) {
-      for (const u of sc.f) if (u && !u.dead) { u.stuck = null; u.runT = 0; }
-      sc.done = true; continue;
-    }
-    // 推力：本列身后的己方兵 + 相邻两列算一半（v8：按格子密度折算回 25 列的基准）
-    const P = [0, 0];
-    for (let s = 0; s < 2; s++) {
-      for (let c = Math.max(0, sc.c - sideN); c <= Math.min(COLS - 1, sc.c + sideN); c++) for (const u of byCol[c]) {
-        if (u.side !== s || u.dead || u.hitting) continue;
-        const back = (u.pos - sc.x) * -DIR[s];       // 在交战点后方多远
-        if (back < 0 || back > CFG.SCRUM_DEPTH * KD) continue;
-        P[s] += u.c === sc.c ? 1 : CFG.SCRUM_SIDE / sideN;
-      }
-      P[s] = Math.max(1, P[s] / KD);
-    }
-    sc.P = P;
-    if (sc.t > holdMs()) {
-      // 推挤：推力大的一方把交战点往对面推
-      const v = clamp((P[0] - P[1]) * opt('push') * KD, -CFG.SCRUM_VMAX * KD, CFG.SCRUM_VMAX * KD);
-      sc.x += -v * dt / 1000;   // 蓝方往小行号推
-      sc.x = clamp(sc.x, 0.5, ROWS - 1.5);
-      placeFronts(sc);
-      // 身后的人跟着被推后退，保持 1 格间距
-      for (let s = 0; s < 2; s++) {
-        const col = colU(sc.c, s).filter(u => u !== sc.f[s] && !u.stuck).sort((a, b) => adv(b) - adv(a));
-        let lead = sc.f[s];
-        for (const u of col) {
-          const gap = (lead.pos - u.pos) * DIR[s];
-          if (gap >= 0 && gap < 1) setUPos(u, lead.pos - DIR[s]);
-          lead = u;
-        }
-      }
-      // 消耗：对面推力越大，自己前排磨得越快
-      for (let s = 0; s < 2; s++) {
-        sc.dmg[s] += dt * KD / (opt('scrumT') * 1000) * Math.pow(P[1 - s], 0.7);
-        const fu = sc.f[s];
-        if (!fu) continue;
-        if (sc.dmg[s] >= 1) {
-          sc.dmg[s] -= 1; fu.pw -= 1;
-          if (fu.pw <= 0) {
-            const o = sc.f[1 - s];
-            killUnit(fu, 1 - s, o ? o.src : 'auto', 9);
-            R.burst(fu.c + 0.5, 0.3, fu.pos + 0.5, HEX.gold, 3, 1);
-            ring(sc.c, sc.x + 0.5, 0.8); sfx('crack', Math.min(9, Math.round(P[1 - s])));
-            sc.f[s] = null;
-          }
-        }
-      }
-      // 被推到底线：直接撞上基地
-      for (let s = 0; s < 2; s++) {
-        const fu = sc.f[s]; if (!fu || fu.dead) continue;
-        if ((TARGET[s] - fu.pos) * DIR[s] <= 1) { sc.f[s] = null; fu.stuck = null; toHitter(fu); }
-      }
-      if (Math.random() < dt / 600) sfx('hum', 400);
-    }
-    if (Math.random() < 0.08) R.burst(sc.c + 0.5, 0.3, sc.x + 0.5, HEX.gold, 1, 0.4);
-  }
-  G.scrums = G.scrums.filter(s => !s.done);
-}
-
-/* ===== 一对一（对比用） ===== */
+/* ===== 一对一（已采纳） ===== */
 function updateDuels(dt) {
   for (const d of G.duels) {
     d.t += dt;
@@ -728,41 +644,6 @@ function updateDuels(dt) {
     }
   }
   G.duels = G.duels.filter(d => !d.done);
-}
-
-/* ===== 整波对撞（对比用；兵多剩余继续冲为已采纳结论；同时崩碎为已采纳结论） ===== */
-function startClash(a, b) {
-  if (a.state !== 'move' || b.state !== 'move') return;
-  a.state = b.state = 'clash';
-  const A0 = liveUnits(a), B0 = liveUnits(b), cols = [];
-  for (const u of A0) for (const e of B0) if (e.c === u.c && Math.abs(e.pos - u.pos) <= 1.2) cols.push(u.c);
-  const cc = cols.length ? cols.reduce((s, c) => s + c, 0) / cols.length : COLS / 2;
-  const order = list => list.slice().sort((x, y) => (adv(y) - adv(x)) || (Math.abs(x.c - cc) - Math.abs(y.c - cc)));
-  const A = order(A0), B = order(B0);
-  const cl = { kind: 'clash', a, b, t: 0, events: [], cc };
-  const ma = A.length ? adv(A[0]) : 0, mb = B.length ? adv(B[0]) : 0;
-  for (const u of A) if (adv(u) >= ma - 0.9) u.stuck = cl;
-  for (const u of B) if (adv(u) >= mb - 0.9) u.stuck = cl;
-  const pa = A.map(u => u.pw), pb = B.map(u => u.pw);
-  let i = 0, j = 0;
-  while (i < A.length && j < B.length) {
-    const m = Math.min(pa[i], pb[j]);
-    cl.events.push([A[i], m, B[j]], [B[j], m, A[i]]);
-    pa[i] -= m; pb[j] -= m;
-    if (pa[i] <= 0) i++;
-    if (pb[j] <= 0) j++;
-  }
-  cl.z = A[0] && B[0] ? (A[0].pos + B[0].pos) / 2 + 0.5 : HALF;
-  G.clashes.push(cl);
-  sfx('boom'); sfx('hum', holdMs() + 200); ring(cc, cl.z, 1.4);
-}
-function updateClash(cl, dt) {
-  cl.t += dt;
-  if (cl.t < holdMs()) return;
-  for (const [u, m, by] of cl.events) { if (u.dead) continue; u.pw -= m; if (u.pw <= 0) killUnit(u, 1 - u.side, by.src, 9); }
-  sfx('crack', 4); ring(cl.cc, cl.z, 1.2);
-  G.clashes.splice(G.clashes.indexOf(cl), 1);
-  for (const w of [cl.a, cl.b]) { w.units = liveUnits(w); for (const u of w.units) { if (u.stuck === cl) u.stuck = null; u.runT = 0; } w.state = 'move'; }
 }
 
 /* ===== 打到基地：卡住 → 僵持 → 崩碎 ===== */
@@ -872,7 +753,6 @@ function updateSurges(dt) {
 function updateLine(dt) {
   const k = Math.min(1, dt / 350);
   const hot = new Float32Array(COLS);
-  for (const sc of G.scrums) hot[sc.c] = Math.max(hot[sc.c], Math.min(sc.P[0], sc.P[1]));
   for (const d of G.duels) hot[d.c] = Math.max(hot[d.c], 1);
   for (let c = 0; c < COLS; c++) {
     let bf = Infinity, of = -Infinity;
@@ -935,13 +815,11 @@ function update(dt) {
   updateWalls(dt);
   moveUnits(dt);
   updateHitters(dt);
-  updateScrums(dt);
   updateDuels(dt);
-  for (const cl of G.clashes.slice()) updateClash(cl, dt);
   updateSurges(dt);
-  G.waves = G.waves.filter(w => { if (w.state === 'move') w.units = liveUnits(w); return w.units.length > 0 || w.state === 'clash'; });
+  G.waves = G.waves.filter(w => { if (w.state === 'move') w.units = liveUnits(w); return w.units.length > 0; });
   updateLine(dt);
-  if (G.mode === 'ai' && !opt('watch')) { G.ai.t -= dt; if (G.ai.t <= 0) { G.ai.t = AI_LV[G.diff].think * (0.7 + Math.random() * 0.6); aiThink(); } }
+  if (G.mode === 'ai' && !G.watch) { G.ai.t -= dt; if (G.ai.t <= 0) { G.ai.t = AI_LV[G.diff].think * (0.7 + Math.random() * 0.6); aiThink(); } }
   checkEnd();
 }
 function checkEnd() {
@@ -1004,8 +882,8 @@ const R = (() => {
   }
   let palNow = '';
   function syncPalette() {
-    if (palNow === opt('pal')) return;
-    palNow = opt('pal'); applyPalette();
+    if (palNow === palKey()) return;
+    palNow = palKey(); applyPalette();
     for (const k of ['neutral', 'neutralHi', 'gold', 'under']) col[k].set(HEX[k]);
     for (const k of ['unit', 'back', 'soft', 'dark']) col[k].forEach((c, i) => c.set(HEX[k][i]));
     renderer.setClearColor(HEX.clear);
@@ -1114,12 +992,13 @@ const R = (() => {
   }
 
   const frags = [];
-  function burst(x, y, z, hex, n, power) {
+  function burst(x, y, z, hex, n, power, dz) {
     if (!G) return;
     const c = new THREE.Color(hex);
     for (let i = 0; i < n; i++) {
       if (frags.length >= 1600) frags.shift();
-      const a = Math.random() * Math.PI * 2, v = (1.2 + Math.random() * 2.6) * (power || 1);
+      // dz：碎块方向（v8.3），朝 ±z 一侧约 90° 的扇形飞出、速度更快
+      const a = dz ? (dz > 0 ? Math.PI / 2 : -Math.PI / 2) + (Math.random() - 0.5) * 1.6 : Math.random() * Math.PI * 2, v = (1.2 + Math.random() * 2.6) * (power || 1) * (dz ? 1.35 : 1);
       frags.push({ x: x + (Math.random() - 0.5) * 0.5, y: y + Math.random() * 0.3, z: z - 0.5 + (Math.random() - 0.5) * 0.5,
         vx: Math.cos(a) * v, vy: 1.5 + Math.random() * 3.5 * (power || 1), vz: Math.sin(a) * v, rx: Math.random() * 6, ry: Math.random() * 6, life: 1, c, s: 0.6 + Math.random() * 0.8 });
     }
@@ -1151,6 +1030,8 @@ const R = (() => {
     let fl = 0, sq = 0, pop = 1, kb = 0;
     if (opt('flash') && u.flT !== undefined) { const e = t - u.flT; fl = e < 60 ? 1 : Math.max(0, 1 - (e - 60) / 160); }
     if (opt('squash') && u.sqT !== undefined) { const e = t - u.sqT; if (e < 200) sq = 0.35 * Math.sin(Math.PI * e / 200); }
+    // 冲锋蓄力：出发前 0.18 秒压扁（sq > 0），出发后 0.12 秒拉长（sq < 0）再回原样
+    if (opt('charge') && u.wave && u.wave.chargeT !== undefined) { const e = t - u.wave.chargeT; if (e < 180) sq += 0.4 * Math.min(1, e / 120); else if (e < 360) sq += 0.4 * Math.max(0, 1 - (e - 180) / 50) - 0.3 * Math.sin(Math.PI * clamp((e - 200) / 160, 0, 1)); }
     if (opt('pop') && u.bornT !== undefined) { const e = t - u.bornT; if (e < 120) pop = 0.3 + 0.9 * (1 - Math.pow(1 - e / 120, 2)); else if (e < 320) pop = 1 + 0.2 * Math.exp(-(e - 120) / 50) * Math.cos((e - 120) / 30); }
     if (opt('kb') === 'bounce' && u.kbT !== undefined) { const e = t - u.kbT; if (e < 70) kb = u.kbA * e / 70; else if (e < 520) kb = u.kbA * Math.exp(-(e - 70) / 90) * Math.cos((e - 70) / 70); }
     FX.fl = fl; FX.sq = sq; FX.pop = pop; FX.kb = kb; return FX;
@@ -1173,7 +1054,7 @@ const R = (() => {
           if (qv > 0 && qv < 2) {
             sumQ[i] += qv; tSide[i] = u.side; tAlpha[i] = u.alpha;
             if (fx.fl > tFl[i]) tFl[i] = fx.fl;
-            if (fx.sq > tSq[i]) tSq[i] = fx.sq;
+            if (Math.abs(fx.sq) > Math.abs(tSq[i])) tSq[i] = fx.sq;
             if (Math.abs(fx.pop - 1) > Math.abs(tPop[i] - 1)) tPop[i] = fx.pop;
             if (u.pw > tPw[i]) tPw[i] = u.pw;
             if (u.parried) tGold[i] = 1;
@@ -1200,7 +1081,7 @@ const R = (() => {
     if (sOn !== shadowOn) { shadowOn = sOn; renderer.shadowMap.enabled = sOn; sun.castShadow = sOn; mats.forEach(m => m.needsUpdate = true); }
     syncPalette();
     if (!!opt('toon') !== toonOn) applyToon();
-    const t = G ? G.time : now(), roll = opt('flipMode') === 'b', jelly = opt('flipMode') === 'c' || opt('flipMode') === 'd', sdt = dt / 1000;
+    const t = G ? G.time : now(), roll = opt('flipMode') === 'b', jelly = 'cdef'.includes(opt('flipMode')), sdt = dt / 1000;
     rippleOn = opt('flipMode') === 'a';   // 波纹带动（已采纳）：只在地面翻牌时
     sumQ.fill(0, 0, VN); tStuck.fill(0, 0, VN); tPw.fill(0, 0, VN); tGold.fill(0, 0, VN); rp.fill(0, 0, VN); ringY.fill(0, 0, VN); surgeY.fill(0); ringHX.fill(0, 0, VN); ringHZ.fill(0, 0, VN); tFl.fill(0, 0, VN); tSq.fill(0, 0, VN); tPop.fill(1, 0, VN);
     const units = G ? allUnits() : [];
@@ -1291,7 +1172,7 @@ const R = (() => {
     top.count = bot.count = VN;
     top.instanceMatrix.needsUpdate = bot.instanceMatrix.needsUpdate = true;
     top.instanceColor.needsUpdate = bot.instanceColor.needsUpdate = true;
-    if (G && dt > 0 && opt('flipSound') && !roll) { flipCount += flips; flipT += dt; if (flipT >= 35) { if (flipCount > 0) sfx('flip', flipCount); flipCount = 0; flipT = 0; } }
+    if (G && dt > 0 && !roll) { flipCount += flips; flipT += dt; if (flipT >= 35) { if (flipCount > 0) sfx('flip', flipCount); flipCount = 0; flipT = 0; } }
 
     // 翻跟头模式：小兵是地面上的薄板，以前边贴地的边为轴向前翻
     let ui = 0, rollFlips = 0;
@@ -1299,7 +1180,7 @@ const R = (() => {
       // 果冻（v8.2）：地面不动，兵是地面上的像素块
       //  同步跳：同一波兵按领头兵的节拍一起跳格子，前沿、后沿同时起落
       //  平滑波：兵平滑前进，一道缩放波从方阵中间荡向两翼
-      const sync = opt('flipMode') === 'c', wph = new Map();
+      const jm = opt('flipMode'), wph = new Map();   // e 各自跳 / c 同步跳 / f 波浪跳 / d 平滑波
       for (const w of G.waves) {
         let lead = null, cs = 0, n = 0;
         for (const u of w.units) { if (u.dead) continue; cs += u.c; n++; if (!u.stuck && u.wait <= 0 && (!lead || u.d > lead.d)) lead = u; }
@@ -1309,15 +1190,20 @@ const R = (() => {
         if (ui >= UMAX) break;
         const d = DIR[u.side], a = adv(u), W = wph.get(u.wave), moving = W && !u.stuck && !u.hitting && u.wait <= 0 && !(u.kbUntil > G.time);
         let da = a, sxz = 1;
-        if (moving && sync) {
-          const fw = W.a - Math.floor(W.a), mv = clamp((fw - 0.15) / 0.45, 0, 1);
-          da = Math.max(0, Math.round(a - fw)) + mv * mv * (3 - 2 * mv);   // 缩小时挪过去
-          sxz = fw < 0.5 ? 1 - 0.34 * Math.sin(2 * Math.PI * fw) : 1 - 0.16 * Math.sin(2 * Math.PI * fw);
+        const hop = f => { const mv = clamp((f - 0.15) / 0.45, 0, 1); return mv * mv * (3 - 2 * mv); };   // 缩小时挪过去
+        const jel = f => f < 0.5 ? 1 - 0.34 * Math.sin(2 * Math.PI * f) : 1 - 0.16 * Math.sin(2 * Math.PI * f);
+        if (moving && (jm === 'c' || jm === 'f' || jm === 'e')) {
+          // 各自跳：用自己的格内进度；同步跳：整波用领头兵的进度；波浪跳：领头兵进度 + 每排差半拍 + 沿斜边每列差 0.12 拍
+          const ph = jm === 'e' ? a : jm === 'c' ? W.a : W.a + 0.5 * u.off + 0.12 * Math.abs(u.c - W.cc);
+          const fw = ph - Math.floor(ph);
+          da = jm === 'e' ? Math.floor(a) + hop(fw) : Math.max(0, Math.round(a - fw)) + hop(fw);
+          sxz = jel(fw);
         } else if (moving) {
           const ph = W.a - Math.abs(u.c - W.cc) * 0.1;
           sxz = 1 + 0.16 * Math.sin(2 * Math.PI * ph);
         }
-        if (u.stuck) sxz = 1 + (opt('impact') === 'a' ? Math.sin(t / 30 + u.id) * 0.06 : -0.12 * stuckP(u));
+        // 撞上时双方都弹到最大（v8.3），顶着的过程中保持最大、略微抖动
+        if (u.stuck) sxz = 1.2 + (opt('impact') === 'a' ? Math.sin(t / 30 + u.id) * 0.03 : 0);
         const fx = fxOf(u), base = Math.floor(da);
         if (u.lastBase !== undefined && u.lastBase !== base) rollFlips++;
         u.lastBase = base;
@@ -1330,12 +1216,12 @@ const R = (() => {
         m4.compose(pv, q, sv);
         uTop.setMatrixAt(ui, m4); uBot.setMatrixAt(ui, m4);
         tc.copy(col.unit[u.side]); if (u.parried) tc.lerp(col.gold, 0.35);
-        if (toonOn && sxz > 1.02) tc.lerp(col.white, (sxz - 1) * 1.2);
+        if (toonOn && sxz > 1.02 && !u.stuck) tc.lerp(col.white, (sxz - 1) * 1.2);
         if (fx.fl) tc.lerp(col.white, fx.fl * 0.9);
         uTop.setColorAt(ui, tc); tc.copy(col.back[u.side]); uBot.setColorAt(ui, tc);
         ui++;
       }
-      if (rollFlips && opt('flipSound') && dt > 0) sfx('flip', rollFlips * 3);
+      if (rollFlips && dt > 0) sfx('flip', rollFlips * 3);
     }
     if (G && roll) {
       for (const u of units) {
@@ -1360,14 +1246,14 @@ const R = (() => {
         uTop.setColorAt(ui, tc); tc.copy(col.back[u.side]); uBot.setColorAt(ui, tc);
         ui++;
       }
-      if (rollFlips && opt('flipSound') && dt > 0) sfx('flip', rollFlips * 4);
+      if (rollFlips && dt > 0) sfx('flip', rollFlips * 4);
     }
     // 碎裂顿帧（只定住碎的兵）：变白、鼓大、抖 0.08 秒，再炸开
     let di = 0;
     if (G) {
       for (const dd of G.dying) {
         dd.t += dt;
-        if (dd.t >= 80) { burst(dd.x, 0.2, dd.z, HEX.unit[dd.side], dd.n, 1.15); dd.done = true; continue; }
+        if (dd.t >= 80) { burst(dd.x, 0.2, dd.z, HEX.unit[dd.side], dd.n, 1.15, dd.dz); dd.done = true; continue; }
         if (di >= 300) continue;
         const k = dd.t / 80, sc = 1 + 0.2 * Math.sin(Math.PI * Math.min(1, k * 1.4));
         pv.set(dd.x + Math.sin(t / 9 + dd.x * 7) * 0.07, TH + SH * sc / 2, dd.z); q.identity(); sv.set(sc, sc, sc);
@@ -1669,7 +1555,8 @@ function renderDbg() {
     if (d.g) return `<div class="grp-t">${d.g}</div>`;
     const v = DBG.val[d.id], vd = DBG.verdict[d.id], off = d.when && !d.when();
     const right = d.type === 'bool' ? `<button class="sw" data-id="${d.id}" aria-pressed="${v ? 'true' : 'false'}" aria-label="${d.name}"></button>`
-      : d.type === 'num' ? `<span class="it-val" id="val-${d.id}">${fmtNum(d, v)}</span>` : '';
+      : d.type === 'num' ? `<span class="it-val" id="val-${d.id}">${fmtNum(d, v)}</span>`
+      : d.type === 'color' ? `<input type="color" class="clr" data-id="${d.id}" value="${v}" aria-label="${d.name}">` : '';
     const opts = d.type === 'ab' ? [['a', d.a], ['b', d.b]] : d.type === 'sel' ? d.opts : null;
     const body = opts ? `<div class="seg">${opts.map(([k, l]) => `<button data-id="${d.id}" data-v="${k}" aria-pressed="${v === k}">${l}</button>`).join('')}</div>`
       : d.type === 'num' ? `<input type="range" id="rng-${d.id}" data-id="${d.id}" min="${d.min}" max="${d.max}" step="${d.step}" value="${v}" aria-label="${d.name}">` : '';
@@ -1694,7 +1581,9 @@ $('#dbgList').addEventListener('click', e => {
   if (id === 'phone') { applyPhone(); setTimeout(() => R.fit(), 0); }
 });
 $('#dbgList').addEventListener('input', e => {
-  const el = e.target; if (el.type !== 'range') return;
+  const el = e.target;
+  if (el.type === 'color') { DBG.val[el.dataset.id] = el.value; saveDbg(); return; }
+  if (el.type !== 'range') return;
   const d = ITEMS.find(x => x.id === el.dataset.id);
   DBG.val[d.id] = +el.value; $('#val-' + d.id).textContent = fmtNum(d, el.value);
   saveDbg();
@@ -1702,11 +1591,11 @@ $('#dbgList').addEventListener('input', e => {
 function dbgSummary() {
   const n = new Date(), day = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
   const tag = { yes: '采纳', no: '不采纳', wait: '待定' };
-  let out = `像素小兵 v8.2 调试结论（${day}）\n格式：项目（结论）：当前值。结论针对整个项目，与当前值无关`;
+  let out = `像素小兵 v8.3 调试结论（${day}）\n格式：项目（结论）：当前值。结论针对整个项目，与当前值无关`;
   for (const d of DEBUG) {
     if (d.g) { out += `\n【${d.g}】`; continue; }
     const v = DBG.val[d.id];
-    const cur = d.type === 'bool' ? (v ? '开' : '关') : d.type === 'num' ? fmtNum(d, v) : d.type === 'sel' ? d.opts.find(o => o[0] === v)[1] : (v === 'a' ? d.a : d.b);
+    const cur = d.type === 'bool' ? (v ? '开' : '关') : d.type === 'num' ? fmtNum(d, v) : d.type === 'sel' ? d.opts.find(o => o[0] === v)[1] : d.type === 'color' ? v : (v === 'a' ? d.a : d.b);
     out += `\n- ${d.name}（${tag[DBG.verdict[d.id]]}）：当前 ${cur}`;
   }
   if (G) {
@@ -1738,7 +1627,7 @@ function hideOverlays() { ['#menu', '#pause', '#end'].forEach(s => $(s).hidden =
 function showMenu() { G = null; hideOverlays(); $('#menu').hidden = false; $('#lbar').innerHTML = ''; $('#rbar').innerHTML = ''; barEls.length = 0; R.clearFx(); setToolbar(); }
 function pauseGame() { if (!G || G.over) return; G.paused = true; $('#pause').hidden = false; setToolbar(); }
 function resumeGame() { if (G) G.paused = false; $('#pause').hidden = true; last = 0; setToolbar(); }
-function restart() { if (lastSetup) newGame(lastSetup.mode, lastSetup.diff); }
+function restart() { if (lastSetup) newGame(lastSetup.mode, lastSetup.diff, lastSetup.watch); }
 $('#tbPause').addEventListener('click', () => { if (G && G.paused) resumeGame(); else pauseGame(); });
 $('#tbRestart').addEventListener('click', restart);
 $('#tbMenu').addEventListener('click', showMenu);
@@ -1746,7 +1635,7 @@ $('#tbMute').addEventListener('click', e => { muted = !muted; e.target.textConte
 $('#resume').addEventListener('click', resumeGame);
 $('#restart').addEventListener('click', restart);
 $('#toMenu').addEventListener('click', showMenu);
-document.querySelectorAll('#menu [data-mode]').forEach(b => b.addEventListener('click', () => { audio(); newGame(b.dataset.mode, b.dataset.diff || 'normal'); }));
+document.querySelectorAll('#menu [data-mode]').forEach(b => b.addEventListener('click', () => { audio(); newGame(b.dataset.mode, b.dataset.diff || 'normal', !!b.dataset.watch); }));
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
 
 function endGame(w) {
