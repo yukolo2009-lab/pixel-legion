@@ -140,7 +140,7 @@ h1{font-family:var(--f-cn);font-weight:400;font-size:42px;margin:0;line-height:1
 <div id="shell">
   <aside id="dbg" aria-label="调试栏">
     <button class="dbg-mini" id="dbgOpen" aria-label="展开调试栏">调试</button>
-    <div class="dbg-head"><h2>调试栏</h2><span class="tag">v8.4</span><button class="x" id="dbgClose" aria-label="收窄调试栏">收起</button></div>
+    <div class="dbg-head"><h2>调试栏</h2><span class="tag">v8.5</span><button class="x" id="dbgClose" aria-label="收窄调试栏">收起</button></div>
     <p class="dbg-note">开关和滑块随时调、立刻生效（标“下一局”的除外）。试完给每一项标上采纳或不采纳，结论保存在这台设备上。</p>
     <div class="dbg-list" id="dbgList"></div>
     <div class="dbg-foot">
@@ -247,6 +247,7 @@ const DEBUG = [
   { id: 'hold',    name: '僵持时长',     type: 'num', min: 0, max: 0.8, step: 0.05, def: 0.3, unit: '秒', desc: '撞上后先卡住多久，才开始消耗' },
   { id: 'wallMax', name: '盾墙最长时间', type: 'num', min: 1, max: 5, step: 0.5, def: 3, unit: '秒' },
   { id: 'hp',      name: '基地血量',     type: 'num', min: 10, max: 80, step: 5, def: 40, unit: '', desc: '下一局生效' },
+  { id: 'cols',    name: '地形列数',     type: 'num', min: 20, max: 25, step: 1, def: 25, unit: '列', desc: '点“重开”生效；行数按屏幕比例自动跟着变，格子保持正方形。速度、方阵宽度、击退距离按比例换算，滑块数值仍按 25 列' },
   { g: '画面' },
   { id: 'phone',   name: '手机比例预览', type: 'bool', def: true, desc: '把游戏区框成 iPhone 18 Pro / Pro Max 的 19.5:9；切换后点“重开”让行数重算' },
   { id: 'pal', name: '配色', type: 'sel', opts: [['sand', '黄土沙场'], ['grass', '青草原野'], ['night', '夜战'], ['custom', '自定义']], def: 'sand', desc: '地面和双方颜色，立刻生效；选“自定义”后用下面 4 个取色框自己配' },
@@ -264,11 +265,15 @@ const DEBUG = [
   { id: 'shield',  name: '盾的样子', type: 'ab', a: '半透特效', b: '实体', def: 'a' },
   { id: 'impact',  name: '撞击效果', type: 'ab', a: '卡在翻转中途', b: '受力弯曲', def: 'a' },
   { id: 'flash',   name: '碰撞闪白', type: 'bool', def: true, desc: '撞上的瞬间整块兵变白，0.2 秒内褪回' },
-  { id: 'kb',      name: '碰撞击退', type: 'sel', opts: [['off', '关'], ['bounce', '弹开回位'], ['real', '真的后退']], def: 'bounce', desc: '撞上时随机向后弹（距离见下一项）。弹开回位：只是画面，弹完回原位；真的后退：兵真的被撞回去，再冲上来（每次交锋只退一次）' },
+  { id: 'kb',      name: '碰撞击退', type: 'sel', opts: [['off', '关'], ['bounce', '弹开回位'], ['real', '真的后退']], def: 'bounce', desc: '撞上时向后方左右 45° 以内随机斜着弹开。弹开回位：只是画面，弹完回原位；真的后退：兵真的被撞回去（可能退到相邻列），再冲上来（每次交锋只退一次）' },
   { id: 'kbProb',  name: '击退概率', type: 'num', min: 0, max: 100, step: 5, def: 50, unit: '%', when: () => opt('kb') !== 'off', whenNo: '“碰撞击退”关着，不生效', desc: '每个兵撞上时有多大概率被击退' },
+  { id: 'backPush', name: '后排顶住必退', type: 'bool', def: true, desc: '我方兵身后紧挨着还有兵、而敌方那列只有 1 个兵时，敌兵必定被撞退 1 格（不看概率；退无可退时才正常交战）' },
   { id: 'kbDist',  name: '击退距离', type: 'num', min: 0.5, max: 6, step: 0.5, def: 3, unit: '格', when: () => opt('kb') !== 'off', whenNo: '“碰撞击退”关着，不生效', desc: '每次随机退“设定值的一半到全部”，例如 3 格 = 随机退 1.5～3 格' },
   { id: 'hitstop', name: '碎裂顿帧', type: 'sel', opts: [['off', '关'], ['local', '只定住碎的兵'], ['global', '整个画面停']], def: 'local', desc: '只定住碎的兵：碎之前变白、鼓大、抖 0.08 秒再炸开；整个画面停：碎的瞬间全场停 0.06 秒（最多每 0.3 秒一次），打进基地停更久' },
-  { id: 'cube',    name: '立体块', type: 'bool', def: false, desc: '士兵从薄片变成接近正方体的立体块（正俯视下主要看影子和圆角边的明暗）' },
+  { id: 'cube',    name: '立体块', type: 'bool', def: false, desc: '士兵变成接近正方体的立体块，6 个面同一贴图同一颜色；撞上时固定压扁一下（不受“撞击挤扁”开关影响）' },
+  { id: 'rim',     name: '士兵边缘高光', type: 'bool', def: true, desc: '士兵外圈一道亮边' },
+  { id: 'jellyK',  name: '果冻变形幅度', type: 'num', min: 0, max: 200, step: 10, def: 100, unit: '%', when: () => opt('flipMode') === 'e' || opt('flipMode') === 'f', whenNo: '只在“果冻·各自跳 / 果冻·波浪跳”时生效', desc: '缩小、弹大、撞上时放大的幅度' },
+  { id: 'fragK',   name: '碎块大小', type: 'num', min: 0.5, max: 3, step: 0.1, def: 1, unit: '倍' },
   { id: 'debris',  name: '碎块方向', type: 'bool', def: true, desc: '碎块朝被撞的方向（往自己身后）飞，而不是四面散开' },
   { id: 'charge',  name: '冲锋蓄力', type: 'bool', def: true, desc: '每波出发前整波先压扁 0.18 秒，再拉长弹射出去' },
   { id: 'squash',  name: '撞击挤扁', type: 'bool', def: true, desc: '撞上时沿前进方向被压扁、横向变宽，再回弹' },
@@ -306,7 +311,7 @@ loadDbg();
 // 所有“按格算”的速度、宽度、距离都乘 KD，屏幕上的快慢和大小与 25 列时一致
 const MAX_ROWS_ALL = Math.ceil(CFG.MAX_ROWS * CFG.MAX_COLS / CFG.BASE_COLS), MAXVN = CFG.MAX_COLS * MAX_ROWS_ALL;
 let COLS = 25, KD = 1;
-function setCols(n) { n = +n; COLS = n === 38 || n === 50 ? n : 25; KD = COLS / CFG.BASE_COLS; }
+function setCols(n) { COLS = clamp(Math.round(+n) || 25, 20, CFG.MAX_COLS); KD = COLS / CFG.BASE_COLS; }
 const kd = v => Math.max(1, Math.round(v * KD));   // 按格子密度换算的格数
 let ROWS = 60, N = COLS * ROWS, HALF = ROWS / 2, SPAWN = [ROWS - 1, 0], TARGET = [-1, ROWS], VN = COLS * ROWS;
 function setRows(r) { ROWS = r; N = COLS * r; HALF = r / 2; SPAWN = [r - 1, 0]; TARGET = [-1, r]; VN = COLS * r; }
@@ -420,7 +425,7 @@ const autoMs = () => opt('autoIntC') * 1000;
 
 function newGame(mode, diff, watch) {
   applyPhone();
-  setCols(CFG.COLS);
+  setCols(opt('cols'));
   setRows(R.autoRows());
   const hp = opt('hp');
   G = { mode, diff, time: 0, over: false, paused: false, frenzy: false, hpMax: hp,
@@ -465,13 +470,18 @@ function hitStop(ms, force) {
 // 碰撞反馈（v8.2）：闪白、挤扁、弹开回位（只是画面）
 function hitFx(x) {
   x.flT = x.sqT = G.time;
-  if (opt('kb') === 'bounce' && Math.random() * 100 < opt('kbProb')) { x.kbT = G.time; x.kbA = kbAmt(); }
+  if (opt('kb') === 'bounce' && Math.random() * 100 < opt('kbProb')) { x.kbT = G.time; x.kbA = kbAmt(); x.kbAng = kbAngle(); }
 }
+const kbAngle = () => (Math.random() - 0.5) * Math.PI / 2;   // 击退方向：正后方左右各 45° 以内
 const kbAmt = () => opt('kbDist') * (0.5 + 0.5 * Math.random()) * KD;   // 击退距离：设定值的一半到全部
 // 真的后退：把兵和身后挨着的己方兵一起往回推
-function pushBack(u, amt) {
-  const dir = DIR[u.side], back = allUnits().filter(x => x !== u && x.side === u.side && x.c === u.c && !x.stuck && !x.hitting && adv(x) < adv(u)).sort((a, b) => adv(b) - adv(a));
-  setUPos(u, u.pos - dir * Math.min(amt, Math.max(0, adv(u))));
+function pushBack(u, amt, ang) {
+  if (ang === undefined) ang = kbAngle();
+  const dir = DIR[u.side], bk = Math.min(amt * Math.cos(ang), Math.max(0, adv(u))), nc = clamp(Math.round(u.c + amt * Math.sin(ang)), 0, COLS - 1), np = u.pos - dir * bk;
+  // 斜着退：落点吸附到最近的格子，可能换到相邻列；那里有兵就只往正后方退
+  if (nc !== u.c && !allUnits().some(o => o !== u && o.c === nc && Math.abs(o.pos - np) < 1.05)) { u.slT = G.time; u.slX = u.c - nc; u.c = nc; setUPos(u, np); return; }
+  const back = allUnits().filter(x => x !== u && x.side === u.side && x.c === u.c && !x.stuck && !x.hitting && adv(x) < adv(u)).sort((a, b) => adv(b) - adv(a));
+  setUPos(u, np);
   let lead = u;
   for (const x of back) { if ((lead.pos - x.pos) * dir < 1) setUPos(x, lead.pos - dir); lead = x; }
 }
@@ -608,7 +618,15 @@ function engage(u, e) {
   hitFx(u); hitFx(e);
   // 真的后退（v8.2）：第一次相撞双方各被随机撞退一段，愣 0.12 秒再冲上来；第二次才顶住
   let pushed = false;
-  if (opt('kb') === 'real') for (const x of [u, e]) {
+  // 后排顶住必退：我方身后紧挨着有兵、敌方这列只有它 1 个 → 敌兵必定被撞退 1 格（退无可退时正常交战）
+  if (opt('backPush')) {
+    const behind = x => allUnits().some(o => o !== x && o.side === x.side && o.c === x.c && !o.hitting && adv(x) - adv(o) > 0.05 && adv(x) - adv(o) <= 1.6);
+    for (const [me, foe] of [[u, e], [e, u]]) {
+      if (pushed || adv(foe) < 0.9 || !behind(me) || behind(foe)) continue;
+      pushBack(foe, KD, 0); foe.kbUntil = G.time + 120; foe.runT = Math.min(foe.runT, 300); foe.kbDone = true; pushed = true; G.bpN = (G.bpN || 0) + 1;
+    }
+  }
+  if (opt('kb') === 'real' && !pushed) for (const x of [u, e]) {
     if (x.kbDone) continue; x.kbDone = true;
     if (Math.random() * 100 >= opt('kbProb')) continue;   // 击退概率
     pushBack(x, kbAmt()); x.kbUntil = G.time + 120; x.runT = Math.min(x.runT, 300); pushed = true;
@@ -861,8 +879,9 @@ const R = (() => {
     const c = document.createElement('canvas'); c.width = c.height = 32; const g = c.getContext('2d'); draw(g);
     const t = new THREE.CanvasTexture(c); t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; return t;
   }
-  // 士兵正面（v8.4）：边缘一圈亮高光 + 内侧一道细暗线勾边，中间略暗，兵和地面分得开
-  const frontTex = tex(g => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, 32, 32); g.fillStyle = '#9c9c9c'; g.fillRect(4, 4, 24, 24); g.fillStyle = '#bdbdbd'; g.fillRect(5, 5, 22, 22); g.fillStyle = '#d0d0d0'; g.fillRect(7, 7, 18, 18); g.fillStyle = '#efefef'; g.fillRect(7, 7, 11, 3); g.fillRect(7, 7, 3, 9); });
+  // 士兵正面（v8.5）：外圈一道亮边（去掉了 v8.4 内侧的细暗线，那道线看起来像凹槽）；plainTex = 不要亮边
+  const frontTex = tex(g => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, 32, 32); g.fillStyle = '#cdcdcd'; g.fillRect(4, 4, 24, 24); g.fillStyle = '#d8d8d8'; g.fillRect(7, 7, 18, 18); g.fillStyle = '#ececec'; g.fillRect(7, 7, 11, 3); g.fillRect(7, 7, 3, 9); });
+  const plainTex = tex(g => { g.fillStyle = '#d8d8d8'; g.fillRect(0, 0, 32, 32); g.fillStyle = '#e6e6e6'; g.fillRect(7, 7, 11, 3); g.fillRect(7, 7, 3, 9); });
   const backTex = tex(g => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, 32, 32); g.strokeStyle = '#8c8c8c'; g.lineWidth = 3; for (let k = -32; k < 64; k += 9) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k + 32, 32); g.stroke(); } g.strokeStyle = '#a8a8a8'; g.lineWidth = 2; g.strokeRect(1, 1, 30, 30); });
   const groundTex = tex(g => { g.fillStyle = '#eeeeee'; g.fillRect(0, 0, 32, 32); g.fillStyle = '#ffffff'; g.fillRect(2, 2, 28, 28); g.fillStyle = '#f2f2f2'; g.fillRect(9, 12, 3, 3); g.fillRect(20, 21, 2, 2); });
   // 卡通着色（v8）：三档色阶；每个标准材质配一个卡通版本，开关时整体替换
@@ -966,20 +985,40 @@ const R = (() => {
   }
   // 士兵：上下两半（正面 / 背面），圆角；“立体块”时换成接近正方体的几何体
   const SH = CFG.SOLDIER_H, CH = 0.8, ST = 0.9;
-  const half = (hgt, up) => { const g = rbox(ST, hgt / 2, ST, 0.15); g.translate(0, (up ? 1 : -1) * hgt / 4, 0); return g; };
-  const gUTop = half(SH, true), gUBot = half(SH, false), gCTop = half(CH, true), gCBot = half(CH, false);
+  const half = (hgt, up, boxUV) => {
+    const g = rbox(ST, hgt / 2, ST, 0.15); g.translate(0, (up ? 1 : -1) * hgt / 4, 0);
+    if (boxUV) {   // 立体块：每个面按自己的方向贴图，侧面不再被拉成竖线；上下两半合起来是一整面
+      const P = g.attributes.position, Nn = g.attributes.normal, uv = g.attributes.uv;
+      for (let i = 0; i < P.count; i++) {
+        const nx = Math.abs(Nn.getX(i)), ny = Math.abs(Nn.getY(i)), nz = Math.abs(Nn.getZ(i)), x = P.getX(i) / ST + 0.5, y = P.getY(i) / hgt + 0.5, z = P.getZ(i) / ST + 0.5;
+        if (ny >= nx && ny >= nz) uv.setXY(i, x, 1 - z); else if (nx >= nz) uv.setXY(i, z, y); else uv.setXY(i, x, y);
+      }
+      uv.needsUpdate = true;
+    }
+    return g;
+  };
+  const gUTop = half(SH, true), gUBot = half(SH, false), gCTop = half(CH, true, true), gCBot = half(CH, false, true);
   let BH = SH, cubeOn = false;
   const UMAX = 4000;
-  const uTop = inst(gUTop, M({ color: 0xffffff, roughness: 0.55, map: frontTex }), UMAX, true);
-  const uBot = inst(gUBot, M({ color: 0xffffff, roughness: 0.55, map: backTex }), UMAX, true);
+  const uTopMat = M({ color: 0xffffff, roughness: 0.55, map: frontTex }), uBotMat = M({ color: 0xffffff, roughness: 0.55, map: backTex });
+  const uTop = inst(gUTop, uTopMat, UMAX, true);
+  const uBot = inst(gUBot, uBotMat, UMAX, true);
+  let skinKey = '';
+  const setMap = (m, t) => { m.map = t; toonOf.get(m).map = t; };
   function syncCube() {
-    if (!!opt('cube') === cubeOn) return;
-    cubeOn = !!opt('cube'); BH = cubeOn ? CH : SH;
+    // 立体块：换几何体；上下两半用同一贴图（6 个面一样，没有斜纹），颜色也一样
+    const key = (opt('cube') ? 1 : 0) + '' + (opt('rim') ? 1 : 0);
+    if (key === skinKey) return;
+    skinKey = key; cubeOn = !!opt('cube'); BH = cubeOn ? CH : SH;
     uTop.geometry = cubeOn ? gCTop : gUTop; uBot.geometry = cubeOn ? gCBot : gUBot;
+    const face = opt('rim') ? frontTex : plainTex;
+    setMap(uTopMat, face); setMap(uBotMat, cubeOn ? face : backTex);
+    for (const m of [dieMat, barMat, flyMat]) setMap(m, face);
   }
-  const dieMesh = inst(rbox(ST, SH, ST, 0.15), M({ color: 0xffffff, roughness: 0.5, map: frontTex }), 300, false);
-  const barracks = inst(rbox(0.4, 0.4, 0.4, 0.09), M({ color: 0xffffff, roughness: 0.6, map: frontTex }), 64, true);
-  const flyMesh = inst(rbox(0.4, 0.4, 0.4, 0.09), M({ color: 0xffffff, roughness: 0.6, map: frontTex }), 80, true);
+  const dieMat = M({ color: 0xffffff, roughness: 0.5, map: frontTex }), barMat = M({ color: 0xffffff, roughness: 0.6, map: frontTex }), flyMat = M({ color: 0xffffff, roughness: 0.6, map: frontTex });
+  const dieMesh = inst(rbox(ST, SH, ST, 0.15), dieMat, 300, false);
+  const barracks = inst(rbox(0.4, 0.4, 0.4, 0.09), barMat, 64, true);
+  const flyMesh = inst(rbox(0.4, 0.4, 0.4, 0.09), flyMat, 80, true);
   const fragMesh = inst(new THREE.BoxGeometry(0.12, 0.12, 0.12), M({ color: 0xffffff, roughness: 0.6 }), 1600, true);
   const solidWall = inst(new THREE.BoxGeometry(1, 1, 1), M({ color: 0xffffff, roughness: 0.5 }), 12, true);
   const glassMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false });
@@ -1028,7 +1067,7 @@ const R = (() => {
       // dz：碎块方向（v8.3），朝 ±z 一侧约 90° 的扇形飞出、速度更快
       const a = dz ? (dz > 0 ? Math.PI / 2 : -Math.PI / 2) + (Math.random() - 0.5) * 1.6 : Math.random() * Math.PI * 2, v = (1.2 + Math.random() * 2.6) * (power || 1) * (dz ? 1.35 : 1);
       frags.push({ x: x + (Math.random() - 0.5) * 0.5, y: y + Math.random() * 0.3, z: z - 0.5 + (Math.random() - 0.5) * 0.5,
-        vx: Math.cos(a) * v, vy: 1.5 + Math.random() * 3.5 * (power || 1), vz: Math.sin(a) * v, rx: Math.random() * 6, ry: Math.random() * 6, life: 1, c, s: 0.6 + Math.random() * 0.8 });
+        vx: Math.cos(a) * v, vy: 1.5 + Math.random() * 3.5 * (power || 1), vz: Math.sin(a) * v, rx: Math.random() * 6, ry: Math.random() * 6, life: 1, c, s: (0.6 + Math.random() * 0.8) * opt('fragK') });
     }
   }
   const bk = [[], []];
@@ -1048,18 +1087,23 @@ const R = (() => {
   const ringHX = new Float32Array(MAXVN), ringHZ = new Float32Array(MAXVN), qt = new THREE.Quaternion();
   const LX = -0.7071, LZ = 0.7071;   // 阳光在水平面上的来向（左下方）
   // 打击感（v8.2）：闪白、挤扁、出生弹出、弹开回位
-  const FX = { fl: 0, sq: 0, pop: 1, kb: 0 };
+  const FX = { fl: 0, sq: 0, pop: 1, kb: 0, kbx: 0 };
   function fxOf(u) {
     const t = G.time;
     if (u.bornT === undefined && onBoard(Math.round(u.pos))) u.bornT = t;
-    let fl = 0, sq = 0, pop = 1, kb = 0;
+    let fl = 0, sq = 0, pop = 1, kb = 0, kbx = 0;
     if (opt('flash') && u.flT !== undefined) { const e = t - u.flT; fl = e < 60 ? 1 : Math.max(0, 1 - (e - 60) / 160); }
-    if (opt('squash') && u.sqT !== undefined) { const e = t - u.sqT; if (e < 200) sq = 0.35 * Math.sin(Math.PI * e / 200); }
+    if ((opt('squash') || cubeOn) && u.sqT !== undefined) { const e = t - u.sqT; if (e < 200) sq = 0.35 * Math.sin(Math.PI * e / 200); }
     // 冲锋蓄力：出发前 0.18 秒压扁（sq > 0），出发后 0.12 秒拉长（sq < 0）再回原样
     if (opt('charge') && u.wave && u.wave.chargeT !== undefined) { const e = t - u.wave.chargeT; if (e < 180) sq += 0.4 * Math.min(1, e / 120); else if (e < 360) sq += 0.4 * Math.max(0, 1 - (e - 180) / 50) - 0.3 * Math.sin(Math.PI * clamp((e - 200) / 160, 0, 1)); }
     if (opt('pop') && u.bornT !== undefined) { const e = t - u.bornT; if (e < 120) pop = 0.3 + 0.9 * (1 - Math.pow(1 - e / 120, 2)); else if (e < 320) pop = 1 + 0.2 * Math.exp(-(e - 120) / 50) * Math.cos((e - 120) / 30); }
-    if (opt('kb') === 'bounce' && u.kbT !== undefined) { const e = t - u.kbT; if (e < 70) kb = u.kbA * e / 70; else if (e < 520) kb = u.kbA * Math.exp(-(e - 70) / 90) * Math.cos((e - 70) / 70); }
-    FX.fl = fl; FX.sq = sq; FX.pop = pop; FX.kb = kb; return FX;
+    if (opt('kb') === 'bounce' && u.kbT !== undefined) {
+      const e = t - u.kbT; let k = 0;
+      if (e < 70) k = u.kbA * e / 70; else if (e < 520) k = u.kbA * Math.exp(-(e - 70) / 90) * Math.cos((e - 70) / 70);
+      const an = u.kbAng || 0; kb = k * Math.cos(an); kbx = k * Math.sin(an);
+    }
+    if (u.slT !== undefined) { const e = t - u.slT; if (e < 150) kbx += u.slX * (1 - e / 150); }   // 真的斜退换列：滑过去
+    FX.fl = fl; FX.sq = sq; FX.pop = pop; FX.kb = kb; FX.kbx = kbx; return FX;
   }
   let punchV = 0;
   const stuckP = u => u.stuck ? 0.001 + clamp(u.stuck.t / Math.max(1, holdMs()), 0, 1) : 0;
@@ -1138,7 +1182,7 @@ const R = (() => {
         const d = DIR[u.side], a = adv(u), W = wph.get(u.wave), moving = W && !u.stuck && !u.hitting && u.wait <= 0 && !(u.kbUntil > G.time);
         let da = a, sxz = 1;
         const hop = f => { const mv = clamp((f - 0.15) / 0.45, 0, 1); return mv * mv * (3 - 2 * mv); };   // 缩小时挪过去
-        const jel = f => f < 0.5 ? 1 - 0.34 * Math.sin(2 * Math.PI * f) : 1 - 0.16 * Math.sin(2 * Math.PI * f);
+        const jk = opt('jellyK') / 100, jel = f => 1 + (f < 0.5 ? -0.34 * Math.sin(2 * Math.PI * f) : -0.16 * Math.sin(2 * Math.PI * f)) * jk;
         if (moving) {
           // 各自跳：用自己的格内进度；波浪跳：领头兵进度 + 每排差半拍 + 沿斜边每列差 0.12 拍
           const ph = jm === 'e' ? a : W.a + 0.5 * u.off + 0.12 * Math.abs(u.c - W.cc);
@@ -1147,22 +1191,22 @@ const R = (() => {
           sxz = noJelly ? 1 : jel(fw);
         }
         // 撞上时双方都弹到最大（v8.3），顶着的过程中保持最大、略微抖动；无形变模式不放大
-        if (u.stuck) sxz = (noJelly ? 1 : 1.2) + (opt('impact') === 'a' ? Math.sin(t / 30 + u.id) * 0.03 : 0);
+        if (u.stuck) sxz = (noJelly ? 1 : 1 + 0.2 * jk) + (opt('impact') === 'a' ? Math.sin(t / 30 + u.id) * 0.03 : 0);
         const fx = fxOf(u), base = Math.floor(da);
         if (u.lastBase !== undefined && u.lastBase !== base) rollFlips++;
         u.lastBase = base;
         const pos = SPAWN[u.side] + d * (da - fx.kb), row = clamp(Math.round(pos), 0, ROWS - 1);
         if (!onBoard(Math.round(pos))) continue;
         const sx = sxz * fx.pop * (1 + fx.sq * 0.6), sz = sxz * fx.pop * (1 - fx.sq);
-        const hh = (BH + (u.pw - 1) * CFG.PW_H) * (1 + (1 - sxz) * (cubeOn ? 0.4 : 1.1)) * fx.pop;
+        const hh = (BH + (u.pw - 1) * CFG.PW_H) * (1 + (1 - sxz) * (cubeOn ? 0.4 : 1.1)) * fx.pop * (cubeOn ? 1 - Math.max(0, fx.sq) * 0.3 : 1);
         const ry = ringY[row * COLS + clamp(u.c, 0, COLS - 1)] || 0;
-        pv.set(u.c + 0.5, TH + hh / 2 + surgeY[row] + ry, pos + 0.5); q.identity(); sv.set(sx, hh / BH, sz);
+        pv.set(u.c + 0.5 + fx.kbx, TH + hh / 2 + surgeY[row] + ry, pos + 0.5); q.identity(); sv.set(sx, hh / BH, sz);
         m4.compose(pv, q, sv);
         uTop.setMatrixAt(ui, m4); uBot.setMatrixAt(ui, m4);
         tc.copy(col.unit[u.side]); if (u.parried) tc.lerp(col.gold, 0.35);
         if (toonOn && sxz > 1.02 && !u.stuck) tc.lerp(col.white, (sxz - 1) * 1.2);
         if (fx.fl) tc.lerp(col.white, fx.fl * 0.9);
-        uTop.setColorAt(ui, tc); tc.copy(col.back[u.side]); uBot.setColorAt(ui, tc);
+        uTop.setColorAt(ui, tc); if (!cubeOn) tc.copy(col.back[u.side]); uBot.setColorAt(ui, tc);
         ui++;
       }
       if (rollFlips && dt > 0) sfx('flip', rollFlips * 3);
@@ -1179,15 +1223,15 @@ const R = (() => {
         if (u.stuck && opt('impact') === 'a') ang += Math.sin(t / 22 + u.id) * 0.08;
         const fx = fxOf(u);
         const pz = cur + 0.5 + d * 0.5 - d * fx.kb, py = TH + surgeY[clamp(cur, 0, ROWS - 1)];
-        const hh = (BH + (u.pw - 1) * CFG.PW_H) * fx.pop;
+        const hh = (BH + (u.pw - 1) * CFG.PW_H) * fx.pop * (cubeOn ? 1 - Math.max(0, fx.sq) * 0.3 : 1);
         q.setFromAxisAngle(axisFor(u.side, 0), ang);
         tA.makeTranslation(0, hh / 2, -d * 0.5);
         tB.makeRotationFromQuaternion(q);
-        m4.makeTranslation(u.c + 0.5, py, pz).multiply(tB).multiply(tA).multiply(sh.makeScale(fx.pop * (1 + fx.sq * 0.6), hh / BH, fx.pop * (1 - fx.sq)));
+        m4.makeTranslation(u.c + 0.5 + fx.kbx, py, pz).multiply(tB).multiply(tA).multiply(sh.makeScale(fx.pop * (1 + fx.sq * 0.6), hh / BH, fx.pop * (1 - fx.sq)));
         uTop.setMatrixAt(ui, m4); uBot.setMatrixAt(ui, m4);
         tc.copy(col.unit[u.side]); if (u.parried) tc.lerp(col.gold, 0.35); if (fx.fl) tc.lerp(col.white, fx.fl * 0.9);
         if (toonOn) { const f = clamp(ang / Math.PI, 0, 1); tc.lerp(col.white, 0.45 * Math.exp(-Math.pow((f - 0.3) / 0.12, 2))); }
-        uTop.setColorAt(ui, tc); tc.copy(col.back[u.side]); uBot.setColorAt(ui, tc);
+        uTop.setColorAt(ui, tc); if (!cubeOn) tc.copy(col.back[u.side]); uBot.setColorAt(ui, tc);
         ui++;
       }
       if (rollFlips && dt > 0) sfx('flip', rollFlips * 4);
@@ -1535,7 +1579,7 @@ $('#dbgList').addEventListener('input', e => {
 function dbgSummary() {
   const n = new Date(), day = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
   const tag = { yes: '采纳', no: '不采纳', wait: '待定' };
-  let out = `像素小兵 v8.4 调试结论（${day}）\n格式：项目（结论）：当前值。结论针对整个项目，与当前值无关`;
+  let out = `像素小兵 v8.5 调试结论（${day}）\n格式：项目（结论）：当前值。结论针对整个项目，与当前值无关`;
   for (const d of DEBUG) {
     if (d.g) { out += `\n【${d.g}】`; continue; }
     const v = DBG.val[d.id];
@@ -1620,7 +1664,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 window.__pl = { get G() { return G; }, newGame, sendWave, raiseWall, dropWall, flick, update, render: d => R.render(d), DBG, opt, CFG, formation, get ROWS() { return ROWS; }, statsRows };
-setCols(CFG.COLS);
+setCols(opt('cols'));
 setRows(R.autoRows());
 R.layout();
 setToolbar();
