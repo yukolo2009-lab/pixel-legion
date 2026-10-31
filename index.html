@@ -139,7 +139,7 @@ h1{font-family:var(--f-cn);font-weight:400;font-size:42px;margin:0;line-height:1
 <div id="shell">
   <aside id="dbg" aria-label="调试栏">
     <button class="dbg-mini" id="dbgOpen" aria-label="展开调试栏">调试</button>
-    <div class="dbg-head"><h2>调试栏</h2><span class="tag">v8.1</span><button class="x" id="dbgClose" aria-label="收窄调试栏">收起</button></div>
+    <div class="dbg-head"><h2>调试栏</h2><span class="tag">v8.2</span><button class="x" id="dbgClose" aria-label="收窄调试栏">收起</button></div>
     <p class="dbg-note">开关和滑块随时调、立刻生效（标“下一局”的除外）。试完给每一项标上采纳或不采纳，结论保存在这台设备上。</p>
     <div class="dbg-list" id="dbgList"></div>
     <div class="dbg-foot">
@@ -251,7 +251,7 @@ const DEBUG = [
   { id: 'phone',   name: '手机比例预览', type: 'bool', def: true, desc: '把游戏区框成 iPhone 18 Pro / Pro Max 的 19.5:9；切换后点“重开”让行数重算' },
   { id: 'pal', name: '配色', type: 'sel', opts: [['sand', '黄土沙场'], ['grass', '青草原野'], ['night', '夜战']], def: 'sand', desc: '地面和双方颜色，立刻生效' },
   { id: 'toon', name: '卡通着色', type: 'bool', def: true, desc: '光影分成几档色阶，翻牌时有一道高光扫过；关掉为普通光照' },
-  { id: 'flipMode', name: '翻转方式',   type: 'sel', opts: [['a', '地面翻牌'], ['b', '地面上翻跟头'], ['c', '果冻']], def: 'a', desc: '果冻：地面不动，兵是地面上的像素块，每走一格先缩小、再弹大、回弹' },
+  { id: 'flipMode', name: '翻转方式',   type: 'sel', opts: [['a', '地面翻牌'], ['b', '地面上翻跟头'], ['c', '果冻·同步跳'], ['d', '果冻·平滑波']], def: 'a', desc: '果冻·同步跳：同一波兵统一节拍跳格子，前后沿同时起落；果冻·平滑波：兵平滑前进，一道缩放波从箭头尖荡向两翼' },
   { id: 'rings',   name: '撞击波纹圈',   type: 'bool', def: true, desc: '相撞、崩碎、打进基地时，地面荡开一圈波纹' },
   { id: 'ringK',   name: '波纹强度', type: 'num', min: 0, max: 2, step: 0.1, def: 1, unit: '倍', when: () => opt('rings'), whenNo: '“撞击波纹圈”关着，不生效', desc: '波纹起伏和明暗有多明显（波纹经过时地板微微倾斜，迎光变亮、背光变暗）' },
   { id: 'ringW',   name: '波纹泛白', type: 'num', min: 0, max: 100, step: 5, def: 30, unit: '%', when: () => opt('rings'), whenNo: '“撞击波纹圈”关着，不生效', desc: '波纹顶上盖一层白色的浓度；0% 不泛白，100% = v7 那么白' },
@@ -260,6 +260,13 @@ const DEBUG = [
   { id: 'fline',   name: '战线显示', type: 'bool', def: true, desc: '金色战线，越焦灼越粗越亮；战线后方地面淡淡染色' },
   { id: 'shield',  name: '盾的样子', type: 'ab', a: '半透特效', b: '实体', def: 'a' },
   { id: 'impact',  name: '撞击效果', type: 'ab', a: '卡在翻转中途', b: '受力弯曲', def: 'a' },
+  { id: 'flash',   name: '碰撞闪白', type: 'bool', def: true, desc: '撞上的瞬间整块兵变白，0.2 秒内褪回' },
+  { id: 'kb',      name: '碰撞击退', type: 'sel', opts: [['off', '关'], ['bounce', '弹开回位'], ['real', '真的后退']], def: 'bounce', desc: '撞上时随机向后弹 0.3～0.8 格。弹开回位：只是画面，弹完回原位；真的后退：兵真的被撞回去，再冲上来顶住（每次交锋只退一次）' },
+  { id: 'hitstop', name: '碎裂顿帧', type: 'sel', opts: [['off', '关'], ['local', '只定住碎的兵'], ['global', '整个画面停']], def: 'local', desc: '只定住碎的兵：碎之前变白、鼓大、抖 0.08 秒再炸开；整个画面停：碎的瞬间全场停 0.06 秒（最多每 0.3 秒一次），打进基地停更久' },
+  { id: 'squash',  name: '撞击挤扁', type: 'bool', def: true, desc: '撞上时沿前进方向被压扁、横向变宽，再回弹' },
+  { id: 'pop',     name: '出生弹出', type: 'bool', def: true, desc: '兵进入战场时从小弹到大，再回弹一下' },
+  { id: 'combo',   name: '连碎音阶', type: 'bool', def: true, desc: '短时间内连续碎兵，每碎一个音调升高一级' },
+  { id: 'punch',   name: '镜头推一下', type: 'bool', def: true, desc: '大面积相撞、整屏顿帧、打进基地时，画面瞬间放大一点再回来' },
   { id: 'arrow',   name: '箭头阵',   type: 'bool', def: true, desc: '中间先出发，两翼依次跟上（斜边 20°）；关掉则同时出发' },
   { g: '玩法' },
   { id: 'clashMode', name: '交战方式', type: 'sel', opts: [['a', '顶牛推挤'], ['b', '一对一'], ['c', '整波对撞']], def: 'a',
@@ -352,7 +359,7 @@ function tone(f0, f1, dur, type, vol, delay) {
 const lastS = {};
 function sfx(k, arg) {
   if (!AC || muted) return;
-  const t = AC.currentTime, gapS = { crack: 0.03, boom: 0.09, hum: 0.12, flip: 0.02 }[k] || 0.05;
+  const t = AC.currentTime, gapS = { crack: 0.03, boom: 0.09, hum: 0.12, flip: 0.02, note: 0.045 }[k] || 0.05;
   if (lastS[k] && t - lastS[k] < gapS) return;
   lastS[k] = t;
   try {
@@ -374,6 +381,7 @@ function sfx(k, arg) {
         break;
       }
       case 'base':  tone(95, 45, 0.24, 'sawtooth', 0.08); break;
+      case 'note': { const st = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28][Math.min(12, arg)], f = 440 * Math.pow(2, st / 12); tone(f, f * 1.01, 0.08, 'triangle', 0.035); break; }
       case 'wall':  tone(260, 360, 0.1, 'triangle', 0.06); break;
       case 'drop':  tone(300, 180, 0.08, 'triangle', 0.035); break;
       case 'stretch': tone(180, 260, 0.12, 'sine', 0.03); break;
@@ -407,7 +415,7 @@ function newGame(mode, diff) {
     line: new Float32Array(COLS).fill(HALF), heat: new Float32Array(COLS),
     waves: [], hitters: [], clashes: [], duels: [], scrums: [], walls: [], snaps: [], surges: [], rings: [], flyers: [], ptr: [null, null],
     queue: [[], []], autoT: autoMs() - 1200,
-    ai: { t: 900, want: 0 }, sides: [mkSide(0, hp), mkSide(1, hp)] };
+    ai: { t: 900, want: 0 }, dying: [], freeze: 0, stopT: -1e9, combo: 0, comboT: -1e9, sides: [mkSide(0, hp), mkSide(1, hp)] };
   lastSetup = { mode, diff };
   R.layout(); R.clearFx();
   buildBars(); hideOverlays(); setToolbar();
@@ -427,7 +435,31 @@ function killUnit(u, killer, by, n) {
   if (u.dead) return;
   u.dead = true;
   if (killer != null) { G.sides[killer].stats.kills++; if (by) G.sides[killer].win[by]++; }
-  if (onBoard(Math.round(u.pos))) R.burst(u.c + 0.5, 0.2, u.pos + 0.5, HEX.unit[u.side], n || 8, 1);
+  if (!onBoard(Math.round(u.pos))) return;
+  // 碎裂顿帧（v8.2）：只定住碎的兵 → 先画 0.08 秒“变白鼓大”再炸；整个画面停 → 全场停一下
+  const hs = opt('hitstop');
+  if (hs === 'local') G.dying.push({ x: u.c + 0.5, z: u.pos + 0.5, side: u.side, n: n || 8, t: 0, pw: u.pw });
+  else R.burst(u.c + 0.5, 0.2, u.pos + 0.5, HEX.unit[u.side], n || 8, 1);
+  if (hs === 'global') hitStop(60);
+  // 连碎音阶：0.45 秒内接连碎兵，音调一级级升高
+  if (opt('combo')) { G.combo = G.time - G.comboT < 450 ? G.combo + 1 : 0; G.comboT = G.time; sfx('note', G.combo); }
+}
+function hitStop(ms, force) {
+  if (!force && G.time - G.stopT < 300) return;
+  G.stopT = G.time; G.freeze = Math.max(G.freeze, ms);
+  if (opt('punch')) R.punch(ms > 80 ? 0.035 : 0.02);
+}
+// 碰撞反馈（v8.2）：闪白、挤扁、弹开回位（只是画面）
+function hitFx(x) {
+  x.flT = x.sqT = G.time;
+  if (opt('kb') === 'bounce') { x.kbT = G.time; x.kbA = (0.3 + Math.random() * 0.5) * KD; }
+}
+// 真的后退：把兵和身后挨着的己方兵一起往回推
+function pushBack(u, amt) {
+  const dir = DIR[u.side], back = allUnits().filter(x => x !== u && x.side === u.side && x.c === u.c && !x.stuck && !x.hitting && adv(x) < adv(u)).sort((a, b) => adv(b) - adv(a));
+  setUPos(u, u.pos - dir * Math.min(amt, Math.max(0, adv(u))));
+  let lead = u;
+  for (const x of back) { if ((lead.pos - x.pos) * dir < 1) setUPos(x, lead.pos - dir); lead = x; }
 }
 function newWave(side) { return { id: ++wid, side, units: [], delay: 0, speedMul: 1, state: 'move' }; }
 
@@ -519,6 +551,7 @@ function moveUnits(dt) {
   for (const u of all) {
     if (u.dead || u.stuck || u.hitting || u.wave.state !== 'move') continue;
     if (u.wait > 0) { u.wait -= dt; continue; }
+    if (u.kbUntil > G.time) continue;   // 被真的撞退后，愣一下再冲
     const dir = DIR[u.side];
     let delta = dt / intervalU(u);
     for (const o of byCol[u.c]) {
@@ -556,8 +589,16 @@ function moveUnits(dt) {
 function engage(u, e) {
   if (G.time - (G.engT || -1e9) < 250) G.engN = (G.engN || 0) + 1; else G.engN = 1;
   G.engT = G.time;
-  if (G.engN === 8) R.shake(0.07);
+  if (G.engN === 8) { R.shake(0.07); if (opt('punch')) R.punch(0.02); }
   const mode = opt('clashMode');
+  hitFx(u); hitFx(e);
+  // 真的后退（v8.2）：第一次相撞双方各被随机撞退一段，愣 0.12 秒再冲上来；第二次才顶住
+  if (opt('kb') === 'real' && mode !== 'c' && !(u.kbDone && e.kbDone)) {
+    for (const x of [u, e]) { if (x.kbDone) continue; x.kbDone = true; pushBack(x, (0.3 + Math.random() * 0.5) * KD); x.kbUntil = G.time + 120; x.runT = Math.min(x.runT, 300); }
+    sfx('boom'); ring(u.c, (u.pos + e.pos) / 2 + 0.5, 0.8);
+    R.burst(u.c + 0.5, 0.35, (u.pos + e.pos) / 2 + 0.5, '#ffffff', 2, 0.6);
+    return;
+  }
   if (mode === 'c') { startClash(u.wave, e.wave); return; }
   const z = (u.pos + e.pos) / 2;
   if (mode === 'a') {
@@ -728,7 +769,7 @@ function updateClash(cl, dt) {
 function toHitter(u) {
   u.wave.units = u.wave.units.filter(x => x !== u);
   const h = { kind: 'hit', u, t: 0 };
-  u.hitting = true; u.stuck = h;
+  u.hitting = true; u.stuck = h; u.flT = u.sqT = G.time;
   G.hitters.push(h);
   sfx('boom'); sfx('hum', holdMs() + 100);
 }
@@ -744,6 +785,7 @@ function updateHitters(dt) {
       R.burst(u.c + 0.5, 0.3, u.pos + 0.5, HEX.unit[u.side], 10, 1.2);
       ring(u.c, u.pos + 0.5, 1.6);
       R.shake(0.08); sfx('crack', 3); sfx('base'); if (isHuman(foe.s)) buzz(30);
+      if (opt('hitstop') === 'global') hitStop(110, true); else if (opt('punch')) R.punch(0.03);
     }
   }
   G.hitters = G.hitters.filter(h => !h.done);
@@ -1029,6 +1071,7 @@ const R = (() => {
   const UMAX = 4000;
   const uTop = inst(gUTop, M({ color: 0xffffff, roughness: 0.55, map: frontTex }), UMAX, true);
   const uBot = inst(gUBot, M({ color: 0xffffff, roughness: 0.55, map: backTex }), UMAX, true);
+  const dieMesh = inst(new THREE.BoxGeometry(ST, SH, ST), M({ color: 0xffffff, roughness: 0.5, map: frontTex }), 300, false);
   const barracks = inst(new THREE.BoxGeometry(0.4, 0.4, 0.4), M({ color: 0xffffff, roughness: 0.6 }), 64, true);
   const flyMesh = inst(new THREE.BoxGeometry(0.4, 0.4, 0.4), M({ color: 0xffffff, roughness: 0.6 }), 80, true);
   const fragMesh = inst(new THREE.BoxGeometry(0.12, 0.12, 0.12), M({ color: 0xffffff, roughness: 0.6 }), 1600, true);
@@ -1099,6 +1142,20 @@ const R = (() => {
   // 波纹的坡度（v8.1）：让地板跟着波纹倾斜、迎光变亮背光变暗，正俯视也看得见
   const ringHX = new Float32Array(MAXVN), ringHZ = new Float32Array(MAXVN), qt = new THREE.Quaternion();
   const LX = -0.7071, LZ = 0.7071;   // 阳光在水平面上的来向（左下方）
+  // 打击感（v8.2）：每块翻板上的闪白、挤扁、出生弹出
+  const tFl = new Float32Array(MAXVN), tSq = new Float32Array(MAXVN), tPop = new Float32Array(MAXVN).fill(1);
+  const FX = { fl: 0, sq: 0, pop: 1, kb: 0 };
+  function fxOf(u) {
+    const t = G.time;
+    if (u.bornT === undefined && onBoard(Math.round(u.pos))) u.bornT = t;
+    let fl = 0, sq = 0, pop = 1, kb = 0;
+    if (opt('flash') && u.flT !== undefined) { const e = t - u.flT; fl = e < 60 ? 1 : Math.max(0, 1 - (e - 60) / 160); }
+    if (opt('squash') && u.sqT !== undefined) { const e = t - u.sqT; if (e < 200) sq = 0.35 * Math.sin(Math.PI * e / 200); }
+    if (opt('pop') && u.bornT !== undefined) { const e = t - u.bornT; if (e < 120) pop = 0.3 + 0.9 * (1 - Math.pow(1 - e / 120, 2)); else if (e < 320) pop = 1 + 0.2 * Math.exp(-(e - 120) / 50) * Math.cos((e - 120) / 30); }
+    if (opt('kb') === 'bounce' && u.kbT !== undefined) { const e = t - u.kbT; if (e < 70) kb = u.kbA * e / 70; else if (e < 520) kb = u.kbA * Math.exp(-(e - 70) / 90) * Math.cos((e - 70) / 70); }
+    FX.fl = fl; FX.sq = sq; FX.pop = pop; FX.kb = kb; return FX;
+  }
+  let punchV = 0;
   let rippleOn = true;
   const stuckP = u => u.stuck ? 0.001 + clamp(u.stuck.t / Math.max(1, holdMs()), 0, 1) : 0;
 
@@ -1109,12 +1166,15 @@ const R = (() => {
       const vc = u.c;
       if (vc < 0 || vc >= COLS) return;
       {
-        const P = u.pos;
+        const fx = fxOf(u), P = u.pos - d * fx.kb;
         for (let k = Math.floor(P) - 2; k <= Math.ceil(P) + 2; k++) {
           if (k < 0 || k >= ROWS) continue;
           const i = k * COLS + vc, qv = (P - k) * d + 1;
           if (qv > 0 && qv < 2) {
             sumQ[i] += qv; tSide[i] = u.side; tAlpha[i] = u.alpha;
+            if (fx.fl > tFl[i]) tFl[i] = fx.fl;
+            if (fx.sq > tSq[i]) tSq[i] = fx.sq;
+            if (Math.abs(fx.pop - 1) > Math.abs(tPop[i] - 1)) tPop[i] = fx.pop;
             if (u.pw > tPw[i]) tPw[i] = u.pw;
             if (u.parried) tGold[i] = 1;
             const sp = stuckP(u); if (sp > tStuck[i]) tStuck[i] = sp;
@@ -1140,9 +1200,9 @@ const R = (() => {
     if (sOn !== shadowOn) { shadowOn = sOn; renderer.shadowMap.enabled = sOn; sun.castShadow = sOn; mats.forEach(m => m.needsUpdate = true); }
     syncPalette();
     if (!!opt('toon') !== toonOn) applyToon();
-    const t = G ? G.time : now(), roll = opt('flipMode') === 'b', jelly = opt('flipMode') === 'c', sdt = dt / 1000;
+    const t = G ? G.time : now(), roll = opt('flipMode') === 'b', jelly = opt('flipMode') === 'c' || opt('flipMode') === 'd', sdt = dt / 1000;
     rippleOn = opt('flipMode') === 'a';   // 波纹带动（已采纳）：只在地面翻牌时
-    sumQ.fill(0, 0, VN); tStuck.fill(0, 0, VN); tPw.fill(0, 0, VN); tGold.fill(0, 0, VN); rp.fill(0, 0, VN); ringY.fill(0, 0, VN); surgeY.fill(0); ringHX.fill(0, 0, VN); ringHZ.fill(0, 0, VN);
+    sumQ.fill(0, 0, VN); tStuck.fill(0, 0, VN); tPw.fill(0, 0, VN); tGold.fill(0, 0, VN); rp.fill(0, 0, VN); ringY.fill(0, 0, VN); surgeY.fill(0); ringHX.fill(0, 0, VN); ringHZ.fill(0, 0, VN); tFl.fill(0, 0, VN); tSq.fill(0, 0, VN); tPop.fill(1, 0, VN);
     const units = G ? allUnits() : [];
     if (G && !roll && !jelly) for (const u of units) accumulate(u);
     if (G) {
@@ -1200,7 +1260,9 @@ const R = (() => {
         if (tilt) q.premultiply(qt.setFromEuler(eu.set(-Math.atan(hz), 0, Math.atan(hx))));
         const lift = Math.abs(Math.sin(phi)) * Math.max(0, VT / 2 - h / 2);
         const y = h / 2 + lift + yOff;
-        pv.set(vc + 0.5, y, gz); sv.set(1, h / TH, 1);
+        pv.set(vc + 0.5, y, gz);
+        if (side >= 0 && sumQ[i] > 0.001) { const pp = tPop[i], sq = tSq[i]; sv.set((1 + sq * 0.6) * pp, h / TH * pp * (1 + sq * 0.3), (1 - sq) * pp); }
+        else sv.set(1, h / TH, 1);
         m4.compose(pv, q, sv);
         if (bend) {
           const d = DIR[side], kx = (gc % 2 ? 1 : -1) * 0.25 * bend, kz = -d * 0.7 * bend, ty = y - h / 2;
@@ -1220,8 +1282,9 @@ const R = (() => {
       if (yOff > 0.01 && ringY[i] > 0) wh = opt('ringW') / 100 * Math.min(0.35, ringY[i] * 5);
       if (shade) tc.multiplyScalar(1 + shade);
       if (wh) tc.lerp(col.white, wh);
+      if (tFl[i]) tc.lerp(col.white, tFl[i] * 0.9);
       top.setColorAt(i, tc);
-      if (side >= 0) { tc.copy(col.unit[side]); if (tGold[i]) tc.lerp(col.gold, 0.35); if (hl) tc.lerp(col.white, hl); if (shade) tc.multiplyScalar(1 + shade); if (wh) tc.lerp(col.white, wh); } else tc.copy(col.under);
+      if (side >= 0) { tc.copy(col.unit[side]); if (tGold[i]) tc.lerp(col.gold, 0.35); if (hl) tc.lerp(col.white, hl); if (shade) tc.multiplyScalar(1 + shade); if (wh) tc.lerp(col.white, wh); if (tFl[i]) tc.lerp(col.white, tFl[i] * 0.9); } else tc.copy(col.under);
       bot.setColorAt(i, tc);
     }
     layoutDirty = false;
@@ -1233,25 +1296,42 @@ const R = (() => {
     // 翻跟头模式：小兵是地面上的薄板，以前边贴地的边为轴向前翻
     let ui = 0, rollFlips = 0;
     if (G && jelly) {
-      // 果冻（v8.1）：地面不动；兵是地面上的像素块，每走一格：先缩小（被挤扁）→ 跳到下一格 → 弹大 → 回弹
+      // 果冻（v8.2）：地面不动，兵是地面上的像素块
+      //  同步跳：同一波兵按领头兵的节拍一起跳格子，前沿、后沿同时起落
+      //  平滑波：兵平滑前进，一道缩放波从方阵中间荡向两翼
+      const sync = opt('flipMode') === 'c', wph = new Map();
+      for (const w of G.waves) {
+        let lead = null, cs = 0, n = 0;
+        for (const u of w.units) { if (u.dead) continue; cs += u.c; n++; if (!u.stuck && u.wait <= 0 && (!lead || u.d > lead.d)) lead = u; }
+        wph.set(w, { a: lead ? adv(lead) : 0, cc: n ? cs / n : COLS / 2 });
+      }
       for (const u of units) {
         if (ui >= UMAX) break;
-        const d = DIR[u.side], a = adv(u), base = Math.floor(a), f = a - base;
-        const cur = SPAWN[u.side] + d * base;
-        if (!onBoard(cur) && !onBoard(cur + d)) continue;
+        const d = DIR[u.side], a = adv(u), W = wph.get(u.wave), moving = W && !u.stuck && !u.hitting && u.wait <= 0 && !(u.kbUntil > G.time);
+        let da = a, sxz = 1;
+        if (moving && sync) {
+          const fw = W.a - Math.floor(W.a), mv = clamp((fw - 0.15) / 0.45, 0, 1);
+          da = Math.max(0, Math.round(a - fw)) + mv * mv * (3 - 2 * mv);   // 缩小时挪过去
+          sxz = fw < 0.5 ? 1 - 0.34 * Math.sin(2 * Math.PI * fw) : 1 - 0.16 * Math.sin(2 * Math.PI * fw);
+        } else if (moving) {
+          const ph = W.a - Math.abs(u.c - W.cc) * 0.1;
+          sxz = 1 + 0.16 * Math.sin(2 * Math.PI * ph);
+        }
+        if (u.stuck) sxz = 1 + (opt('impact') === 'a' ? Math.sin(t / 30 + u.id) * 0.06 : -0.12 * stuckP(u));
+        const fx = fxOf(u), base = Math.floor(da);
         if (u.lastBase !== undefined && u.lastBase !== base) rollFlips++;
         u.lastBase = base;
-        const mv = clamp((f - 0.15) / 0.45, 0, 1), ease = mv * mv * (3 - 2 * mv);   // 缩小时挪过去
-        let sxz = f < 0.5 ? 1 - 0.34 * Math.sin(2 * Math.PI * f) : 1 - 0.16 * Math.sin(2 * Math.PI * f);
-        if (u.stuck) sxz = 1 + (opt('impact') === 'a' ? Math.sin(t / 30 + u.id) * 0.06 : -0.12 * stuckP(u));
-        const hh = (SH + (u.pw - 1) * CFG.PW_H) * (1 + (1 - sxz) * 1.1);
-        const row = clamp(cur, 0, ROWS - 1), ry = ringY[row * COLS + clamp(u.c, 0, COLS - 1)] || 0;
-        const pz = u.stuck ? u.pos + 0.5 : cur + 0.5 + d * ease;
-        pv.set(u.c + 0.5, TH + hh / 2 + surgeY[row] + ry, pz); q.identity(); sv.set(sxz, hh / SH, sxz);
+        const pos = SPAWN[u.side] + d * (da - fx.kb), row = clamp(Math.round(pos), 0, ROWS - 1);
+        if (!onBoard(Math.round(pos))) continue;
+        const sx = sxz * fx.pop * (1 + fx.sq * 0.6), sz = sxz * fx.pop * (1 - fx.sq);
+        const hh = (SH + (u.pw - 1) * CFG.PW_H) * (1 + (1 - sxz) * 1.1) * fx.pop;
+        const ry = ringY[row * COLS + clamp(u.c, 0, COLS - 1)] || 0;
+        pv.set(u.c + 0.5, TH + hh / 2 + surgeY[row] + ry, pos + 0.5); q.identity(); sv.set(sx, hh / SH, sz);
         m4.compose(pv, q, sv);
         uTop.setMatrixAt(ui, m4); uBot.setMatrixAt(ui, m4);
         tc.copy(col.unit[u.side]); if (u.parried) tc.lerp(col.gold, 0.35);
         if (toonOn && sxz > 1.02) tc.lerp(col.white, (sxz - 1) * 1.2);
+        if (fx.fl) tc.lerp(col.white, fx.fl * 0.9);
         uTop.setColorAt(ui, tc); tc.copy(col.back[u.side]); uBot.setColorAt(ui, tc);
         ui++;
       }
@@ -1267,20 +1347,39 @@ const R = (() => {
         u.lastBase = base;
         let ang = Math.PI * f;
         if (u.stuck && opt('impact') === 'a') ang += Math.sin(t / 22 + u.id) * 0.08;
-        const pz = cur + 0.5 + d * 0.5, py = surgeY[clamp(cur, 0, ROWS - 1)];
-        const hh = SH + (u.pw - 1) * CFG.PW_H;
+        const fx = fxOf(u);
+        const pz = cur + 0.5 + d * 0.5 - d * fx.kb, py = surgeY[clamp(cur, 0, ROWS - 1)];
+        const hh = (SH + (u.pw - 1) * CFG.PW_H) * fx.pop;
         q.setFromAxisAngle(axisFor(u.side, 0), ang);
         tA.makeTranslation(0, hh / 2, -d * 0.5);
         tB.makeRotationFromQuaternion(q);
-        m4.makeTranslation(u.c + 0.5, py, pz).multiply(tB).multiply(tA).multiply(sh.makeScale(1, hh / SH, 1));
+        m4.makeTranslation(u.c + 0.5, py, pz).multiply(tB).multiply(tA).multiply(sh.makeScale(fx.pop * (1 + fx.sq * 0.6), hh / SH, fx.pop * (1 - fx.sq)));
         uTop.setMatrixAt(ui, m4); uBot.setMatrixAt(ui, m4);
-        tc.copy(col.unit[u.side]); if (u.parried) tc.lerp(col.gold, 0.35);
+        tc.copy(col.unit[u.side]); if (u.parried) tc.lerp(col.gold, 0.35); if (fx.fl) tc.lerp(col.white, fx.fl * 0.9);
         if (toonOn) { const f = clamp(ang / Math.PI, 0, 1); tc.lerp(col.white, 0.45 * Math.exp(-Math.pow((f - 0.3) / 0.12, 2))); }
         uTop.setColorAt(ui, tc); tc.copy(col.back[u.side]); uBot.setColorAt(ui, tc);
         ui++;
       }
       if (rollFlips && opt('flipSound') && dt > 0) sfx('flip', rollFlips * 4);
     }
+    // 碎裂顿帧（只定住碎的兵）：变白、鼓大、抖 0.08 秒，再炸开
+    let di = 0;
+    if (G) {
+      for (const dd of G.dying) {
+        dd.t += dt;
+        if (dd.t >= 80) { burst(dd.x, 0.2, dd.z, HEX.unit[dd.side], dd.n, 1.15); dd.done = true; continue; }
+        if (di >= 300) continue;
+        const k = dd.t / 80, sc = 1 + 0.2 * Math.sin(Math.PI * Math.min(1, k * 1.4));
+        pv.set(dd.x + Math.sin(t / 9 + dd.x * 7) * 0.07, TH + SH * sc / 2, dd.z); q.identity(); sv.set(sc, sc, sc);
+        m4.compose(pv, q, sv); dieMesh.setMatrixAt(di, m4);
+        dieMesh.setColorAt(di, tc.copy(col.unit[dd.side]).lerp(col.white, 0.8)); di++;
+      }
+      G.dying = G.dying.filter(dd => !dd.done);
+    }
+    dieMesh.count = di; dieMesh.instanceMatrix.needsUpdate = true; if (di) dieMesh.instanceColor.needsUpdate = true;
+    // 镜头推一下
+    if (punchV > 0 || cam.zoom !== 1) { cam.zoom = 1 + punchV; cam.updateProjectionMatrix(); punchV = Math.max(0, punchV - dt / 1000 * 0.15); }
+
     uTop.count = uBot.count = ui;
     uTop.instanceMatrix.needsUpdate = uBot.instanceMatrix.needsUpdate = true;
     if (ui) uTop.instanceColor.needsUpdate = uBot.instanceColor.needsUpdate = true;
@@ -1414,7 +1513,7 @@ const R = (() => {
     cam.position.copy(s0);
   }
   function clearFx() { frags.length = 0; bk[0].length = 0; bk[1].length = 0; flipCount = 0; }
-  return { fit, layout, autoRows, render, pick, burst, launch, clearFx, shake: v => { shake = Math.max(shake, v); } };
+  return { fit, layout, autoRows, render, pick, burst, launch, clearFx, shake: v => { shake = Math.max(shake, v); }, punch: v => { punchV = Math.max(punchV, v); } };
 })();
 
 function banner(text, side, small) {
@@ -1603,7 +1702,7 @@ $('#dbgList').addEventListener('input', e => {
 function dbgSummary() {
   const n = new Date(), day = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
   const tag = { yes: '采纳', no: '不采纳', wait: '待定' };
-  let out = `像素小兵 v8.1 调试结论（${day}）\n格式：项目（结论）：当前值。结论针对整个项目，与当前值无关`;
+  let out = `像素小兵 v8.2 调试结论（${day}）\n格式：项目（结论）：当前值。结论针对整个项目，与当前值无关`;
   for (const d of DEBUG) {
     if (d.g) { out += `\n【${d.g}】`; continue; }
     const v = DBG.val[d.id];
@@ -1680,8 +1779,9 @@ let statT = 0;
 function frame(ts) {
   const dt = last ? Math.min(50, ts - last) : 16; last = ts;
   const run = G && !G.over && !G.paused;
-  if (run) update(dt);
-  R.render(run ? dt : 0);
+  const frozen = run && G.freeze > 0;   // 整屏顿帧：这几帧不推进
+  if (frozen) G.freeze -= dt; else if (run) update(dt);
+  R.render(run && !frozen ? dt : 0);
   updateBars(); updateHoldBubbles();
   statT += dt; if (statT > 500) { statT = 0; updateStats(); }
   requestAnimationFrame(frame);
